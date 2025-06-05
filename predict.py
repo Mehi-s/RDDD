@@ -173,9 +173,11 @@ if __name__ == '__main__':
             print("Initializing model...")
             # Create the model instance (ClsModel in this case, via the make_model factory)
             # The 'None' argument to make_model might be specific to this project's factory.
-            model = make_model(None)
+            # However, the make_model function in models/__init__.py does not use its argument.
+            model = make_model(opt) # Pass opt, though it's not used by current make_model
             # Initialize the model with the configuration object.
             # This step typically loads network structures and may load some weights if defined in initialize.
+            print("Initializing model with options...") # Added print statement for clarity
             model.initialize(opt)
             print("Model initialized successfully.")
 

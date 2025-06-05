@@ -206,39 +206,66 @@ class ClsModel(YTMTNetBase):
         # self.net_c = PretrainedConvNext("convnext_small_in22k").cuda() # Original line
         self.net_c = PretrainedConvNext("convnext_small_in22k").to(self.device) # Ensure it's on the correct device early
 
-        # Load weights for net_c
-        if hasattr(self.opt, 'model_path') and self.opt.model_path:
-            print(f"Loading net_c weights from user-specified path: {self.opt.model_path}")
-            if not os.path.exists(self.opt.model_path):
-                raise FileNotFoundError(f"User-specified checkpoint not found: {self.opt.model_path}")
-            state_dict = torch.load(self.opt.model_path, map_location=self.device)
-            # Common keys could be 'icnn' (as in original), 'net_c', 'model', or the root
-            if 'icnn' in state_dict:
-                self.net_c.load_state_dict(state_dict['icnn'])
-            elif 'net_c' in state_dict:
-                self.net_c.load_state_dict(state_dict['net_c'])
-            elif 'model' in state_dict: # Another common key for state dicts
-                self.net_c.load_state_dict(state_dict['model'])
-            else:
-                self.net_c.load_state_dict(state_dict) # Assume the file is the state_dict itself
-            print(f"Successfully loaded net_c weights from {self.opt.model_path}")
-        else:
-            default_path = 'pretrained/cls_model.pth'
-            print(f"Loading net_c weights from default path: {default_path}")
-            if not os.path.exists(default_path):
-                raise FileNotFoundError(f"Default checkpoint not found: {default_path}. "
-                                        "Please provide --model_path or ensure this file exists.")
-            state_dict = torch.load(default_path, map_location=self.device)
-            if 'icnn' in state_dict: # Original key
-                self.net_c.load_state_dict(state_dict['icnn'])
-            else:
-                # This fallback should ideally not be hit if default_path is the original one
-                print(f"Warning: Key 'icnn' not found in default checkpoint {default_path}. Attempting to load root.")
-                self.net_c.load_state_dict(state_dict)
-            print(f"Successfully loaded net_c weights from {default_path}")
+        # Load weights for net_c (classifier) - ALWAYS from default path
+        default_classifier_path = 'pretrained/cls_model.pth'
+        print(f"Loading net_c (classifier) weights from default path: {default_classifier_path}")
+        if not os.path.exists(default_classifier_path):
+            raise FileNotFoundError(f"Default classifier checkpoint not found: {default_classifier_path}. Please ensure this file exists.")
 
+        state_dict_c = torch.load(default_classifier_path, map_location=self.device)
+        loaded_c_key = None
+        try:
+            if 'icnn' in state_dict_c:
+                self.net_c.load_state_dict(state_dict_c['icnn'])
+                loaded_c_key = 'icnn'
+            elif 'net_c' in state_dict_c:
+                self.net_c.load_state_dict(state_dict_c['net_c'])
+                loaded_c_key = 'net_c'
+            elif 'model' in state_dict_c:
+                self.net_c.load_state_dict(state_dict_c['model'])
+                loaded_c_key = 'model'
+            else:
+                self.net_c.load_state_dict(state_dict_c)
+                loaded_c_key = 'root'
+            print(f"Successfully loaded net_c weights from {default_classifier_path} (using key '{loaded_c_key}')")
+        except RuntimeError as e:
+            raise RuntimeError(f"Failed to load net_c from {default_classifier_path}. Checkpoint keys ('icnn', 'net_c', 'model', or root) not compatible. Original error: {e}")
+
+        # Initialize net_i (generator)
         self.net_i = FullNet_NLP(channels, layers, num_subnet, opt.loss_col,num_classes=1000, drop_path=0,save_memory=True, inter_supv=True, head_init_scale=None, kernel_size=3).to(self.device)
-    
+
+        # Load weights for net_i (generator) - from self.opt.model_path if provided
+        if hasattr(self.opt, 'model_path') and self.opt.model_path:
+            print(f"Loading net_i (generator) weights from user-specified path: {self.opt.model_path}")
+            if not os.path.exists(self.opt.model_path):
+                raise FileNotFoundError(f"Generator checkpoint not found: {self.opt.model_path}")
+
+            state_dict_i = torch.load(self.opt.model_path, map_location=self.device)
+            loaded_i_key = None
+            try:
+                # Primary attempt: load state_dict_i directly
+                self.net_i.load_state_dict(state_dict_i)
+                loaded_i_key = 'root (direct)'
+                print(f"Successfully loaded net_i weights from {self.opt.model_path} (using key '{loaded_i_key}')")
+            except RuntimeError:
+                # Fallback attempts for net_i
+                keys_to_try_i = ['net_i', 'generator', 'model', 'icnn']
+                loaded_successfully_i = False
+                for key in keys_to_try_i:
+                    if key in state_dict_i:
+                        try:
+                            self.net_i.load_state_dict(state_dict_i[key])
+                            loaded_i_key = key
+                            print(f"Successfully loaded net_i weights from {self.opt.model_path} (using key '{loaded_i_key}')")
+                            loaded_successfully_i = True
+                            break
+                        except RuntimeError:
+                            continue # Try next key
+                if not loaded_successfully_i:
+                    raise RuntimeError(f"Failed to load net_i from {self.opt.model_path}. Ensure the file contains the correct state_dict for FullNet_NLP, either at the root or under a common key like 'net_i', 'generator', 'model', or 'icnn'.")
+        else:
+            print("Warning: No model_path provided for net_i (generator). It will use initial random weights.")
+
         self.edge_map = EdgeMap(scale=1).to(self.device)
     
         if self.isTrain:
