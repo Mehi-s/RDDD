@@ -103,7 +103,7 @@ class YTMTNetBase(BaseModel):
         if target_t is not None:
             self.target_edge = self.edge_map(self.target_t)
 
-    def eval(self, data, savedir=None, suffix=None, pieapp=None):
+    def evaluate_on_data(self, data, savedir=None, suffix=None, pieapp=None):
         self._eval()
         self.set_input(data, 'eval')
         with torch.no_grad():
