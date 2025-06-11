@@ -6,7 +6,13 @@ import numpy as np
 import random
 
 class BaseOptions(Base):
+  """Base options for network-specific configurations.
+
+  This class inherits from the general BaseOptions and adds options
+  related to network architecture, initialization, and GPU settings.
+  """
     def initialize(self):
+      """Initializes network-specific command-line arguments."""
         Base.initialize(self)
         # experiment specifics
         self.parser.add_argument('--inet', type=str, default='ytmt_ucs', help='chooses which architecture to use for inet.')
@@ -18,6 +24,11 @@ class BaseOptions(Base):
         self.initialized = True
 
     def parse(self):
+      """Parses command-line arguments, sets up GPU device, and saves options to a file.
+
+      Returns:
+        The parsed command-line arguments.
+      """
         if not self.initialized:
             self.initialize()
         self.opt = self.parser.parse_args()

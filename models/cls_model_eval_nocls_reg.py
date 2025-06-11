@@ -21,6 +21,15 @@ from models.arch.RDnet_ import FullNet_NLP
 import timm
 
 def tensor2im(image_tensor, imtype=np.uint8):
+  """Converts a tensor image to a numpy image.
+
+  Args:
+    image_tensor: The input tensor image.
+    imtype: The desired data type of the output image.
+
+  Returns:
+    The numpy image.
+  """
     image_tensor = image_tensor.detach()
     image_numpy = image_tensor[0].cpu().float().numpy()
     image_numpy = np.clip(image_numpy, 0, 1)
@@ -32,12 +41,25 @@ def tensor2im(image_tensor, imtype=np.uint8):
 
 
 class EdgeMap(nn.Module):
+  """Computes the edge map of an image.
+
+  Args:
+    scale: The scaling factor for the input image.
+  """
     def __init__(self, scale=1):
         super(EdgeMap, self).__init__()
         self.scale = scale
         self.requires_grad = False
 
     def forward(self, img):
+      """Computes the edge map of the input image.
+
+      Args:
+        img: The input image.
+
+      Returns:
+        The edge map of the input image.
+      """
         img = img / self.scale
 
         N, C, H, W = img.shape
@@ -62,13 +84,25 @@ class EdgeMap(nn.Module):
 
 
 class YTMTNetBase(BaseModel):
+  """Base class for YTMTNet models."""
     def _init_optimizer(self, optimizers):
+      """Initializes the optimizers.
+
+      Args:
+        optimizers: A list of optimizers to initialize.
+      """
         self.optimizers = optimizers
         for optimizer in self.optimizers:
             util.set_opt_param(optimizer, 'initial_lr', self.opt.lr)
             util.set_opt_param(optimizer, 'weight_decay', self.opt.wd)
 
     def set_input(self, data, mode='train'):
+      """Sets the input for the model.
+
+      Args:
+        data: The input data.
+        mode: The mode of the input (e.g., 'train', 'eval', 'test').
+      """
         target_t = None
         target_r = None
         data_name = None
@@ -104,6 +138,17 @@ class YTMTNetBase(BaseModel):
             self.target_edge = self.edge_map(self.target_t)
 
     def evaluate_on_data(self, data, savedir=None, suffix=None, pieapp=None):
+      """Evaluates the model on the given data.
+
+      Args:
+        data: The input data.
+        savedir: The directory to save the output images.
+        suffix: A suffix for the saved images.
+        pieapp: The PieApp metric for evaluation.
+
+      Returns:
+        A dictionary containing the evaluation results.
+      """
         self._eval()
         self.set_input(data, 'eval')
         with torch.no_grad():
@@ -143,6 +188,12 @@ class YTMTNetBase(BaseModel):
             return res
 
     def test(self, data, savedir=None):
+      """Tests the model on the given data.
+
+      Args:
+        data: The input data.
+        savedir: The directory to save the output images.
+      """
         # only the 1st input of the whole minibatch would be evaluated
         self._eval()
         self.set_input(data, 'test')
@@ -166,16 +217,24 @@ class YTMTNetBase(BaseModel):
 
 
 class ClsModel(YTMTNetBase):
+  """Classification model for image restoration."""
     def name(self):
+      """Returns the name of the model.
+
+      Returns:
+        The name of the model ('ytmtnet').
+      """
         return 'ytmtnet'
 
     def __init__(self):
+      """Initializes the ClsModel."""
         self.epoch = 0
         self.iterations = 0
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         self.net_c = None
 
     def print_network(self):
+      """Prints the network architecture."""
         print('--------------------- Model ---------------------')
         print('##################### NetG #####################')
         networks.print_network(self.net_i)
@@ -184,13 +243,20 @@ class ClsModel(YTMTNetBase):
             networks.print_network(self.netD)
 
     def _eval(self):
+      """Sets the model to evaluation mode."""
         self.net_i.eval()
         self.net_c.eval()
 
     def _train(self):
+      """Sets the model to training mode."""
         self.net_i.train()
         self.net_c.eval()
     def initialize(self, opt):
+      """Initializes the model.
+
+      Args:
+        opt: The options for the model.
+      """
         self.opt=opt
         BaseModel.initialize(self, opt)
 
@@ -302,6 +368,7 @@ class ClsModel(YTMTNetBase):
 
 
     def backward_D(self):
+      """Performs the backward pass for the discriminator."""
         loss_D=[]
         weight=self.opt.weight_loss
         for p in self.netD.parameters():
@@ -318,6 +385,16 @@ class ClsModel(YTMTNetBase):
         (self.loss_D * self.opt.lambda_gan).backward(retain_graph=True)
 
     def get_loss(self, out_l, out_r):
+      """Computes the loss for the generator.
+
+      Args:
+        out_l: The output of the left branch.
+        out_r: The output of the right branch.
+
+      Returns:
+        A tuple containing the GAN loss, pixel loss for the clean image, pixel loss for the reflection image,
+        and VGG loss for the clean image.
+      """
         loss_G_GAN_sum=[]
         loss_icnn_pixel_sum=[]
         loss_rcnn_pixel_sum=[]
@@ -349,6 +426,7 @@ class ClsModel(YTMTNetBase):
         return sum(loss_G_GAN_sum), sum(loss_icnn_pixel_sum), sum(loss_rcnn_pixel_sum), sum(loss_icnn_vgg_sum)
 
     def backward_G(self):
+      """Performs the backward pass for the generator."""
 
         self.loss_G_GAN,self.loss_icnn_pixel, self.loss_rcnn_pixel, \
         self.loss_icnn_vgg = self.get_loss(self.output_i, self.output_j)
@@ -364,6 +442,14 @@ class ClsModel(YTMTNetBase):
 
 
     def hyper_column(self, input_img):
+      """Extracts hypercolumn features from the input image using VGG.
+
+      Args:
+        input_img: The input image.
+
+      Returns:
+        A tensor containing the hypercolumn features.
+      """
         hypercolumn = self.vgg(input_img)
         _, C, H, W = input_img.shape
         hypercolumn = [F.interpolate(feature.detach(), size=(H, W), mode='bilinear', align_corners=False) for
@@ -374,6 +460,11 @@ class ClsModel(YTMTNetBase):
         return input_i
 
     def forward(self):
+      """Performs a forward pass through the model.
+
+      Returns:
+        A tuple containing the output of the left branch and the output of the right branch.
+      """
         # without edge
         
         self.output_j=[]
@@ -391,8 +482,13 @@ class ClsModel(YTMTNetBase):
         return self.output_i, self.output_j
 
 
-    @torch.no_grad() 
+    @torch.no_grad()
     def forward_eval(self):
+      """Performs a forward pass in evaluation mode.
+
+      Returns:
+        A tuple containing the output of the left branch and the output of the right branch.
+      """
        
         self.output_j=[]
         input_i = self.input
@@ -409,6 +505,7 @@ class ClsModel(YTMTNetBase):
         return self.output_i, self.output_j
 
     def optimize_parameters(self):
+      """Optimizes the model parameters."""
         self._train()
         self.forward()
         self.optimizer_G.zero_grad()
@@ -416,6 +513,11 @@ class ClsModel(YTMTNetBase):
         self.optimizer_G.step()
 
     def return_output(self):
+      """Returns the output images.
+
+      Returns:
+        A tuple containing the clean image, reflection image, and input image.
+      """
         output_clean = self.output_j[1]
         output_reflection = self.output_j[0]
         output_clean = tensor2im(output_clean).astype(np.uint8)
@@ -423,6 +525,17 @@ class ClsModel(YTMTNetBase):
         input=tensor2im(self.input)
         return output_clean,output_reflection,input
     def exclusion_loss(self, img_T, img_R, level=3, eps=1e-6):
+      """Computes the exclusion loss between two images.
+
+      Args:
+        img_T: The transmission layer image.
+        img_R: The reflection layer image.
+        level: The number of levels for multi-scale computation.
+        eps: A small epsilon value to prevent division by zero.
+
+      Returns:
+        The exclusion loss.
+      """
         loss_gra=[]
         weight=0.25
         for i in range(4):
@@ -455,6 +568,17 @@ class ClsModel(YTMTNetBase):
         return sum(loss_gra) / 2
 
     def contain_loss(self, img_T, img_R, img_I, eps=1e-6):
+      """Computes the containment loss.
+
+      Args:
+        img_T: The transmission layer image.
+        img_R: The reflection layer image.
+        img_I: The input image.
+        eps: A small epsilon value to prevent division by zero.
+
+      Returns:
+        The containment loss.
+      """
         pix_num = np.prod(img_I.shape)
         predict_tx, predict_ty = self.compute_grad(img_T)
         predict_tx, predict_ty = self.compute_grad(img_T)
@@ -469,17 +593,39 @@ class ClsModel(YTMTNetBase):
         return out / pix_num
 
     def compute_grad(self, img):
+      """Computes the image gradients.
+
+      Args:
+        img: The input image.
+
+      Returns:
+        A tuple containing the x and y gradients.
+      """
         gradx = img[:, :, 1:, :] - img[:, :, :-1, :]
         grady = img[:, :, :, 1:] - img[:, :, :, :-1]
         return gradx, grady
 
     def load(self, model, resume_epoch=None):
+      """Loads the model weights from a checkpoint.
+
+      Args:
+        model: The model to load the weights into.
+        resume_epoch: The epoch to resume training from.
+
+      Returns:
+        The state dictionary of the loaded model.
+      """
         icnn_path = model.opt.icnn_path
         state_dict = torch.load(icnn_path)
         model.net_i.load_state_dict(state_dict['icnn'])
         return state_dict
 
     def state_dict(self):
+      """Returns the state dictionary of the model.
+
+      Returns:
+        The state dictionary of the model.
+      """
         state_dict = {
             'icnn': self.net_i.state_dict(),
             'opt_g': self.optimizer_G.state_dict(),
@@ -495,6 +641,15 @@ class ClsModel(YTMTNetBase):
 
         return state_dict
 class AvgPool2d(nn.Module):
+  """Average pooling layer with dynamic kernel size.
+
+  Args:
+    kernel_size: The size of the pooling kernel.
+    base_size: The base size for computing the kernel size.
+    auto_pad: Whether to automatically pad the input.
+    fast_imp: Whether to use a faster implementation (may be non-equivalent).
+    train_size: The training image size.
+  """
     def __init__(self, kernel_size=None, base_size=None, auto_pad=True, fast_imp=False, train_size=None):
         super().__init__()
         self.kernel_size = kernel_size
@@ -509,11 +664,20 @@ class AvgPool2d(nn.Module):
         self.train_size = train_size
 
     def extra_repr(self) -> str:
+      """Returns a string representation of the module."""
         return 'kernel_size={}, base_size={}, stride={}, fast_imp={}'.format(
             self.kernel_size, self.base_size, self.kernel_size, self.fast_imp
         )
 
     def forward(self, x):
+      """Performs a forward pass through the AvgPool2d layer.
+
+      Args:
+        x: The input tensor.
+
+      Returns:
+        The output tensor after average pooling.
+      """
         if self.kernel_size is None and self.base_size:
             train_size = self.train_size
             if isinstance(self.base_size, int):
@@ -563,6 +727,15 @@ class AvgPool2d(nn.Module):
         return out
 
 def replace_layers(model, base_size, train_size, fast_imp, **kwargs):
+  """Replaces nn.AdaptiveAvgPool2d layers with AvgPool2d layers in a model.
+
+  Args:
+    model: The input model.
+    base_size: The base size for computing the kernel size.
+    train_size: The training image size.
+    fast_imp: Whether to use a faster implementation for AvgPool2d.
+    **kwargs: Additional keyword arguments.
+  """
     for n, m in model.named_children():
         if len(list(m.children())) > 0:
             ## compound module, go inside it

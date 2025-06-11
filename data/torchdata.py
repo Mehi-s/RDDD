@@ -17,10 +17,22 @@ class Dataset(object):
         raise NotImplementedError
 
     def __add__(self, other):
+        """Adds two datasets together.
+
+        Args:
+          other: The other dataset to add.
+
+        Returns:
+          A ConcatDataset containing both datasets.
+        """
         return ConcatDataset([self, other])
 
     def reset(self):
-        return 
+      """Resets the dataset.
+
+      This method is intended to be overridden by subclasses.
+      """
+        return
 
 
 class ConcatDataset(Dataset):
@@ -36,6 +48,14 @@ class ConcatDataset(Dataset):
 
     @staticmethod
     def cumsum(sequence):
+      """Calculates the cumulative sum of a sequence.
+
+      Args:
+        sequence: The input sequence.
+
+      Returns:
+        A list containing the cumulative sum of the sequence.
+      """
         r, s = [], 0
         for e in sequence:
             l = len(e)
@@ -44,15 +64,29 @@ class ConcatDataset(Dataset):
         return r
 
     def __init__(self, datasets):
+      """Initializes the ConcatDataset.
+
+      Args:
+        datasets: A sequence of datasets to concatenate.
+      """
         super(ConcatDataset, self).__init__()
         assert len(datasets) > 0, 'datasets should not be an empty iterable'
         self.datasets = list(datasets)
         self.cumulative_sizes = self.cumsum(self.datasets)
 
     def __len__(self):
+      """Returns the total length of the concatenated datasets."""
         return self.cumulative_sizes[-1]
 
     def __getitem__(self, idx):
+      """Returns the item at the given index from the concatenated datasets.
+
+      Args:
+        idx: The index of the item to return.
+
+      Returns:
+        The item at the given index.
+      """
         dataset_idx = bisect.bisect_right(self.cumulative_sizes, idx)
         if dataset_idx == 0:
             sample_idx = idx
@@ -62,6 +96,12 @@ class ConcatDataset(Dataset):
 
     @property
     def cummulative_sizes(self):
+      """Returns the cumulative sizes of the datasets.
+
+      Note:
+        This property is deprecated and will be removed in a future version.
+        Use `cumulative_sizes` instead.
+      """
         warnings.warn("cummulative_sizes attribute is renamed to "
                       "cumulative_sizes", DeprecationWarning, stacklevel=2)
         return self.cumulative_sizes

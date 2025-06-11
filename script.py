@@ -1,3 +1,14 @@
+"""
+This script modifies keys in a PyTorch model weights file (.pt).
+
+It loads a checkpoint, specifically targets keys within the 'icnn' state
+dictionary, and replaces occurrences of 'projback_shit' with 'projback_'
+and 'projback_shit_2' with 'projback_2'. The modified weights are then
+saved to a new file.
+
+This is typically a one-off utility script used to correct or update
+layer names in a saved model checkpoint.
+"""
 import torch
 
 # Load the original weights file

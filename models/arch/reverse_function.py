@@ -4,6 +4,14 @@ from typing import Any, Iterable, List, Tuple, Callable
 import torch.distributed as dist
 
 def get_gpu_states(fwd_gpu_devices) -> Tuple[List[int], List[torch.Tensor]]:
+  """Gets the random number generator states for a list of GPU devices.
+
+  Args:
+    fwd_gpu_devices: A list of GPU device IDs.
+
+  Returns:
+    A tuple containing a list of GPU device IDs and a list of their RNG states.
+  """
     fwd_gpu_states = []
     for device in fwd_gpu_devices:
         with torch.cuda.device(device):
@@ -12,18 +20,42 @@ def get_gpu_states(fwd_gpu_devices) -> Tuple[List[int], List[torch.Tensor]]:
     return fwd_gpu_states
 
 def get_gpu_device(*args):
+  """Gets the unique GPU devices used by the input tensors.
+
+  Args:
+    *args: A variable number of input tensors.
+
+  Returns:
+    A list of unique GPU device IDs.
+  """
 
     fwd_gpu_devices = list(set(arg.get_device() for arg in args
                                if isinstance(arg, torch.Tensor) and arg.is_cuda))
     return fwd_gpu_devices
 
 def set_device_states(fwd_cpu_state, devices, states) -> None:
+  """Sets the RNG states for CPU and GPU devices.
+
+  Args:
+    fwd_cpu_state: The CPU RNG state.
+    devices: A list of GPU device IDs.
+    states: A list of GPU RNG states.
+  """
     torch.set_rng_state(fwd_cpu_state)
     for device, state in zip(devices, states):
         with torch.cuda.device(device):
             torch.cuda.set_rng_state(state)
 
 def detach_and_grad(inputs: Tuple[Any, ...]) -> Tuple[torch.Tensor, ...]:
+  """Detaches input tensors and sets requires_grad to True.
+
+  Args:
+    inputs: A tuple of tensors or other types.
+
+  Returns:
+    A tuple of detached tensors with requires_grad set to True,
+    or the original input if not a tensor.
+  """
     if isinstance(inputs, tuple):
         out = []
         for inp in inputs:
@@ -40,11 +72,35 @@ def detach_and_grad(inputs: Tuple[Any, ...]) -> Tuple[torch.Tensor, ...]:
             "Only tuple of tensors is supported. Got Unsupported input type: ", type(inputs).__name__)
 
 def get_cpu_and_gpu_states(gpu_devices):
+  """Gets the CPU and GPU RNG states.
+
+  Args:
+    gpu_devices: A list of GPU device IDs.
+
+  Returns:
+    A tuple containing the CPU RNG state and a list of GPU RNG states.
+  """
     return torch.get_rng_state(), get_gpu_states(gpu_devices)
 
 class ReverseFunction(torch.autograd.Function):
+  """Custom autograd function for reversible computations.
+
+  This function allows for memory-efficient backpropagation by recomputing
+  intermediate activations during the backward pass instead of storing them.
+  """
     @staticmethod
     def forward(ctx, run_functions, alpha, *args):
+      """Forward pass for the reversible function.
+
+      Args:
+        ctx: Context object to save tensors and information for backward pass.
+        run_functions: A list or tuple of functions to be executed sequentially.
+        alpha: A list or tuple of alpha values (scaling factors for shortcuts).
+        *args: Input arguments for the functions.
+
+      Returns:
+        The output of the sequence of functions.
+      """
         l0, l1, l2, l3 = run_functions
         alpha0, alpha1, alpha2, alpha3 = alpha
         ctx.run_functions  = run_functions
@@ -80,6 +136,18 @@ class ReverseFunction(torch.autograd.Function):
 
     @staticmethod
     def backward(ctx, *grad_outputs):
+      """Backward pass for the reversible function.
+
+      This method recomputes the activations from the previous layers and
+      calculates the gradients.
+
+      Args:
+        ctx: Context object with saved tensors and information from forward pass.
+        *grad_outputs: Gradients of the outputs from the next layer.
+
+      Returns:
+        Gradients for the inputs of the reversible function.
+      """
         x, c0, c1, c2, c3 = ctx.saved_tensors
         l0, l1, l2, l3 = ctx.run_functions
         alpha0, alpha1, alpha2, alpha3 = ctx.alpha

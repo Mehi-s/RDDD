@@ -7,12 +7,23 @@ class GradualWarmupScheduler(_LRScheduler):
     Proposed in 'Accurate, Large Minibatch SGD: Training ImageNet in 1 Hour'.
     Args:
         optimizer (Optimizer): Wrapped optimizer.
-        multiplier: target learning rate = base lr * multiplier if multiplier > 1.0. if multiplier = 1.0, lr starts from 0 and ends up with the base_lr.
-        total_epoch: target learning rate is reached at total_epoch, gradually
-        after_scheduler: after target_epoch, use this scheduler(eg. ReduceLROnPlateau)
+        multiplier (float): Target learning rate = base lr * multiplier. Should be >= 1.0.
+                            If multiplier = 1.0, LR starts from 0 and ends up with the base_lr.
+        total_epoch (int): The number of epochs to reach the target learning rate.
+        after_scheduler (torch.optim.lr_scheduler._LRScheduler, optional):
+                           Scheduler to use after the warmup period. Defaults to None.
     """
 
     def __init__(self, optimizer, multiplier, total_epoch, after_scheduler=None):
+      """Initializes the GradualWarmupScheduler.
+
+      Args:
+        optimizer (Optimizer): Wrapped optimizer.
+        multiplier (float): Target learning rate = base lr * multiplier.
+        total_epoch (int): The number of epochs for warmup.
+        after_scheduler (torch.optim.lr_scheduler._LRScheduler, optional):
+                           Scheduler to use after warmup. Defaults to None.
+      """
         self.multiplier = multiplier
         if self.multiplier < 1.:
             raise ValueError('multiplier should be greater thant or equal to 1.')
@@ -22,6 +33,11 @@ class GradualWarmupScheduler(_LRScheduler):
         super(GradualWarmupScheduler, self).__init__(optimizer)
 
     def get_lr(self):
+      """Calculates the learning rate for the current epoch.
+
+      Returns:
+        A list of learning rates for each parameter group.
+      """
         if self.last_epoch > self.total_epoch:
             if self.after_scheduler:
                 if not self.finished:
@@ -37,6 +53,12 @@ class GradualWarmupScheduler(_LRScheduler):
                     self.base_lrs]
 
     def step_ReduceLROnPlateau(self, metrics, epoch=None):
+      """Handles the step when the after_scheduler is ReduceLROnPlateau.
+
+      Args:
+        metrics (float): The metric used by ReduceLROnPlateau (e.g., validation loss).
+        epoch (int, optional): The current epoch number. Defaults to None.
+      """
         if epoch is None:
             epoch = self.last_epoch + 1
         self.last_epoch = epoch if epoch != 0 else 1  # ReduceLROnPlateau is called at the end of epoch, whereas others are called at beginning
@@ -52,6 +74,17 @@ class GradualWarmupScheduler(_LRScheduler):
                 self.after_scheduler.step(metrics, epoch - self.total_epoch)
 
     def step(self, epoch=None, metrics=None):
+      """Performs a scheduler step.
+
+      If an `after_scheduler` is provided and is not ReduceLROnPlateau,
+      its step method is called after the warmup period.
+      If `after_scheduler` is ReduceLROnPlateau, `step_ReduceLROnPlateau` is called.
+      Otherwise, the parent class's step method is called.
+
+      Args:
+        epoch (int, optional): The current epoch number. Defaults to None.
+        metrics (float, optional): The metric for ReduceLROnPlateau. Defaults to None.
+      """
         if type(self.after_scheduler) != ReduceLROnPlateau:
             if self.finished and self.after_scheduler:
                 if epoch is None:

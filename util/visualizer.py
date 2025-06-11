@@ -8,6 +8,17 @@ import visdom
 import PIL as Image
 
 class Visualizer():
+  """Handles visualization of training results using Visdom and HTML.
+
+  This class provides methods to display images, plot losses, print errors,
+  and save results to an HTML page.
+
+  Args:
+    opt: An object containing command-line options, typically from an
+         ArgumentParser. It should include attributes like `isTrain`,
+         `no_html`, `display_winsize`, `name`, `display_port`,
+         `checkpoints_dir`, etc.
+  """
     def __init__(self, opt):
         self.display_id = -1
         self.use_html = opt.isTrain and not opt.no_html
@@ -29,10 +40,23 @@ class Visualizer():
             log_file.write('================ Training Loss (%s) ================\n' % now)
 
     def reset(self):
+      """Resets the saved status.
+
+      This is typically called at the beginning of each epoch if results
+      are saved per epoch.
+      """
         self.saved = False
 
     # |visuals|: dictionary of images to display or save
     def display_current_results(self, visuals, epoch, save_result):
+      """Displays current results (images) in Visdom and saves them to HTML.
+
+      Args:
+        visuals (OrderedDict): A dictionary of images to display.
+                               Keys are image labels, values are NumPy arrays.
+        epoch (int): The current epoch number.
+        save_result (bool): If True, saves the images to an HTML file.
+      """
         #print(self.display_id)
         if self.display_id > 0:  # show images in the browser
             ncols = self.opt.display_single_pane_ncols
@@ -100,6 +124,15 @@ class Visualizer():
 
     # errors: dictionary of error labels and values
     def plot_current_errors(self, epoch, counter_ratio, opt, errors):
+      """Plots current errors (losses) in Visdom.
+
+      Args:
+        epoch (int): The current epoch number.
+        counter_ratio (float): A float representing the fraction of the current epoch
+                               that has been completed (e.g., 0.5 for halfway through).
+        opt: The options object (not currently used in this method but kept for signature).
+        errors (OrderedDict): A dictionary of error labels and their values.
+      """
         if not hasattr(self, 'plot_data'):
             self.plot_data = {'X': [], 'Y': [], 'legend': list(errors.keys())}
         self.plot_data['X'].append(epoch + counter_ratio)
@@ -117,6 +150,14 @@ class Visualizer():
 
     # errors: same format as |errors| of plotCurrentErrors
     def print_current_errors(self, epoch, i, errors, t):
+      """Prints current errors (losses) to the console and logs them to a file.
+
+      Args:
+        epoch (int): The current epoch number.
+        i (int): The current iteration number within the epoch.
+        errors (OrderedDict): A dictionary of error labels and their values.
+        t (float): The time taken for the current iteration.
+      """
         message = '(epoch: %d, iters: %d, time: %.3f) ' % (epoch, i, t)
         for k, v in errors.items():
             message += '%s: %.3f ' % (k, v)
@@ -127,6 +168,20 @@ class Visualizer():
 
     # save image to the disk
     def save_images(self, webpage, visuals, image_path, aspect_ratio=1.0):
+      """Saves images to an HTML page.
+
+      This method is typically used during testing or evaluation to save
+      output images.
+
+      Args:
+        webpage (HTML): An HTML object to add the images to.
+        visuals (OrderedDict): A dictionary of images to save.
+                               Keys are image labels, values are NumPy arrays.
+        image_path (list of str): A list of image paths (usually only one path).
+                                  The basename of the first path is used as a header.
+        aspect_ratio (float, optional): The aspect ratio to use for resizing images.
+                                        Defaults to 1.0 (no resize).
+      """
         image_dir = webpage.get_image_dir()
         short_path = ntpath.basename(image_path[0])
         name = os.path.splitext(short_path)[0]

@@ -5,6 +5,11 @@ from torchvision import models
 
 
 class Vgg16(torch.nn.Module):
+  """VGG16 model for feature extraction.
+
+  Args:
+    requires_grad: Whether to require gradients for the model parameters.
+  """
     def __init__(self, requires_grad=False):
         super(Vgg16, self).__init__()
         vgg_pretrained_features = models.vgg16(pretrained=True).features
@@ -25,6 +30,14 @@ class Vgg16(torch.nn.Module):
                 param.requires_grad = False
 
     def forward(self, X):
+      """Performs a forward pass through the Vgg16 model.
+
+      Args:
+        X: The input tensor.
+
+      Returns:
+        A named tuple containing the VGG16 features from different layers (relu1_2, relu2_2, relu3_3, relu4_3).
+      """
         h = self.slice1(X)
         h_relu1_2 = h
         h = self.slice2(h)
@@ -39,15 +52,30 @@ class Vgg16(torch.nn.Module):
 
 
 class Vgg19(torch.nn.Module):
+  """VGG19 model for feature extraction.
+
+  Args:
+    requires_grad: Whether to require gradients for the model parameters.
+  """
     def __init__(self, requires_grad=False):
         super(Vgg19, self).__init__()
         self.vgg_pretrained_features = models.vgg19(pretrained=True).features
-      
+
         if not requires_grad:
             for param in self.parameters():
                 param.requires_grad = False
 
     def forward(self, X, indices=None):
+      """Performs a forward pass through the Vgg19 model.
+
+      Args:
+        X: The input tensor.
+        indices: A list of layer indices to extract features from.
+                 If None, default indices [2, 7, 12, 21, 30] will be used.
+
+      Returns:
+        A list of VGG19 features from the specified layers.
+      """
         if indices is None:
             indices = [2, 7, 12, 21, 30]
         out = []

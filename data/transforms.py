@@ -21,6 +21,14 @@ from scipy.signal import convolve2d
 
 # utility
 def _is_pil_image(img):
+  """Checks if an object is a PIL image.
+
+  Args:
+    img: The object to check.
+
+  Returns:
+    True if the object is a PIL image, False otherwise.
+  """
     if accimage is not None:
         return isinstance(img, (Image.Image, accimage.Image))
     else:
@@ -28,18 +36,47 @@ def _is_pil_image(img):
 
 
 def _is_tensor_image(img):
+  """Checks if an object is a tensor image.
+
+  Args:
+    img: The object to check.
+
+  Returns:
+    True if the object is a tensor image, False otherwise.
+  """
     return torch.is_tensor(img) and img.ndimension() == 3
 
 
 def _is_numpy_image(img):
+  """Checks if an object is a numpy image.
+
+  Args:
+    img: The object to check.
+
+  Returns:
+    True if the object is a numpy image, False otherwise.
+  """
     return isinstance(img, np.ndarray) and (img.ndim in {2, 3})
 
 
 def arrshow(arr):
+  """Displays a numpy array as an image.
+
+  Args:
+    arr: The numpy array to display.
+  """
     Image.fromarray(arr.astype(np.uint8)).show()
 
 
 def get_transform(opt):
+  """Returns a composition of image transformations.
+
+  Args:
+    opt: The options for the transformations.
+
+  Returns:
+    A composition of image transformations.
+  """
     transform_list = []
     osizes = util.parse_args(opt.loadSize)
     fineSize = util.parse_args(opt.fineSize)
@@ -77,6 +114,15 @@ to_tensor = transforms.ToTensor()
 
 
 def __scale_width(img, target_width):
+  """Scales the width of an image to a target width.
+
+  Args:
+    img: The input image.
+    target_width: The target width.
+
+  Returns:
+    The scaled image.
+  """
     ow, oh = img.size
     if (ow == target_width):
         return img
@@ -86,8 +132,18 @@ def __scale_width(img, target_width):
     return img.resize((w, h), Image.BICUBIC)
 
 
-# functional 
+# functional
 def gaussian_blur(img, kernel_size, sigma):
+  """Applies Gaussian blur to an image.
+
+  Args:
+    img: The input image.
+    kernel_size: The size of the Gaussian kernel.
+    sigma: The standard deviation of the Gaussian kernel.
+
+  Returns:
+    The blurred image.
+  """
     if not _is_pil_image(img):
         raise TypeError('img should be PIL Image. Got {}'.format(type(img)))
 
@@ -104,17 +160,40 @@ def gaussian_blur(img, kernel_size, sigma):
 
 # transforms
 class GaussianBlur(object):
+  """Applies Gaussian blur to an image.
+
+  Args:
+    kernel_size: The size of the Gaussian kernel.
+    sigma: The standard deviation of the Gaussian kernel.
+  """
     def __init__(self, kernel_size=11, sigma=3):
         self.kernel_size = kernel_size
         self.sigma = sigma
 
     def __call__(self, img):
+      """Applies Gaussian blur to the input image.
+
+      Args:
+        img: The input image.
+
+      Returns:
+        The blurred image.
+      """
         return gaussian_blur(img, self.kernel_size, self.sigma)
 
 
 class ReflectionSythesis_0(object):
     """Reflection image data synthesis for weakly-supervised learning
     of ICCV 2017 paper *"A Generic Deep Architecture for Single Image Reflection Removal and Image Smoothing"*
+
+    Args:
+      kernel_sizes: A list of kernel sizes for Gaussian blur.
+      low_sigma: The lower bound for the standard deviation of the Gaussian kernel.
+      high_sigma: The upper bound for the standard deviation of the Gaussian kernel.
+      low_gamma: The lower bound for the gamma correction factor.
+      high_gamma: The upper bound for the gamma correction factor.
+      low_delta: The lower bound for the delta factor.
+      high_delta: The upper bound for the delta factor.
     """
 
     def __init__(self, kernel_sizes=None, low_sigma=2, high_sigma=5, low_gamma=1.3,
@@ -131,6 +210,15 @@ class ReflectionSythesis_0(object):
             'low_gamma': low_gamma, 'high_gamma': high_gamma}))
 
     def __call__(self, B, R):
+      """Applies reflection synthesis to the input images.
+
+      Args:
+        B: The background image.
+        R: The reflection image.
+
+      Returns:
+        A tuple containing the background image, the synthesized reflection image, and the mixed image.
+      """
         if not _is_pil_image(B):
             raise TypeError('B should be PIL Image. Got {}'.format(type(B)))
         if not _is_pil_image(R):
@@ -161,8 +249,15 @@ class ReflectionSythesis_0(object):
 
 
 class ReflectionSythesis_1(object):
-    """Reflection image data synthesis for weakly-supervised learning 
-    of ICCV 2017 paper *"A Generic Deep Architecture for Single Image Reflection Removal and Image Smoothing"*    
+    """Reflection image data synthesis for weakly-supervised learning
+    of ICCV 2017 paper *"A Generic Deep Architecture for Single Image Reflection Removal and Image Smoothing"*
+
+    Args:
+      kernel_sizes: A list of kernel sizes for Gaussian blur.
+      low_sigma: The lower bound for the standard deviation of the Gaussian kernel.
+      high_sigma: The upper bound for the standard deviation of the Gaussian kernel.
+      low_gamma: The lower bound for the gamma correction factor.
+      high_gamma: The upper bound for the gamma correction factor.
     """
 
     def __init__(self, kernel_sizes=None, low_sigma=2, high_sigma=5, low_gamma=1.3, high_gamma=1.3):
@@ -176,6 +271,15 @@ class ReflectionSythesis_1(object):
             'low_gamma': low_gamma, 'high_gamma': high_gamma}))
 
     def __call__(self, B, R):
+      """Applies reflection synthesis to the input images.
+
+      Args:
+        B: The background image.
+        R: The reflection image.
+
+      Returns:
+        A tuple containing the background image, the synthesized reflection image, and the mixed image.
+      """
         if not _is_pil_image(B):
             raise TypeError('B should be PIL Image. Got {}'.format(type(B)))
         if not _is_pil_image(R):
@@ -206,7 +310,16 @@ class ReflectionSythesis_1(object):
 
 
 class Sobel(object):
+  """Applies the Sobel operator to an image."""
     def __call__(self, img):
+      """Applies the Sobel operator to the input image.
+
+      Args:
+        img: The input image.
+
+      Returns:
+        The image with the Sobel operator applied.
+      """
         if not _is_pil_image(img):
             raise TypeError('img should be PIL Image. Got {}'.format(type(img)))
 
@@ -222,8 +335,11 @@ class Sobel(object):
 
 
 class ReflectionSythesis_2(object):
-    """Reflection image data synthesis for weakly-supervised learning 
+    """Reflection image data synthesis for weakly-supervised learning
     of CVPR 2018 paper *"Single Image Reflection Separation with Perceptual Losses"*
+
+    Args:
+      kernel_sizes: A list of kernel sizes for Gaussian blur. If None, a default list will be used.
     """
 
     def __init__(self, kernel_sizes=None):
@@ -231,7 +347,15 @@ class ReflectionSythesis_2(object):
 
     @staticmethod
     def gkern(kernlen=100, nsig=1):
-        """Returns a 2D Gaussian kernel array."""
+      """Returns a 2D Gaussian kernel array.
+
+      Args:
+        kernlen: The length of the kernel.
+        nsig: The number of standard deviations.
+
+      Returns:
+        A 2D Gaussian kernel array.
+      """
         interval = (2 * nsig + 1.) / (kernlen)
         x = np.linspace(-nsig - interval / 2., nsig + interval / 2., kernlen + 1)
         kern1d = np.diff(st.norm.cdf(x))
@@ -241,6 +365,15 @@ class ReflectionSythesis_2(object):
         return kernel
 
     def __call__(self, t, r):
+      """Applies reflection synthesis to the input images.
+
+      Args:
+        t: The transmission layer image.
+        r: The reflection layer image.
+
+      Returns:
+        A tuple containing the original transmission layer, the synthesized reflection layer, and the blended image.
+      """
         t = np.float32(t) / 255.
         r = np.float32(r) / 255.
         ori_t = t

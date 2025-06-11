@@ -15,7 +15,15 @@ import torch.utils.checkpoint as checkpoint
 from timm.models.layers import DropPath, to_2tuple, trunc_normal_
 
 class Mlp(nn.Module):
-    """ Multilayer perceptron."""
+    """ Multilayer perceptron.
+
+    Args:
+        in_features (int): Number of input features.
+        hidden_features (int, optional): Number of hidden features. Default: None.
+        out_features (int, optional): Number of output features. Default: None.
+        act_layer (nn.Module, optional): Activation layer. Default: nn.GELU.
+        drop (float, optional): Dropout rate. Default: 0.0.
+    """
 
     def __init__(self, in_features, hidden_features=None, out_features=None, act_layer=nn.GELU, drop=0.):
         super().__init__()
@@ -27,6 +35,7 @@ class Mlp(nn.Module):
         self.drop = nn.Dropout(drop)
 
     def forward(self, x):
+      """Forward function."""
         x = self.fc1(x)
         x = self.act(x)
         x = self.drop(x)
@@ -35,18 +44,20 @@ class Mlp(nn.Module):
         return x
 
 class FocalModulation(nn.Module):
-    """ Focal Modulation
+    """ Focal Modulation.
 
     Args:
         dim (int): Number of input channels.
         proj_drop (float, optional): Dropout ratio of output. Default: 0.0
-        focal_level (int): Number of focal levels
-        focal_window (int): Focal window size at focal level 1
-        focal_factor (int, default=2): Step to increase the focal window
-        use_postln (bool, default=False): Whether use post-modulation layernorm
+        focal_level (int): Number of focal levels.
+        focal_window (int): Focal window size at focal level 1.
+        focal_factor (int, default=2): Step to increase the focal window.
+        use_postln (bool, default=False): Whether to use post-modulation layernorm.
+        use_postln_in_modulation (bool, default=False): Whether to use post-layernorm in modulation.
+        normalize_modulator (bool, default=False): Whether to normalize the modulator.
     """
 
-    def __init__(self, dim, proj_drop=0., focal_level=2, focal_window=7, focal_factor=2, use_postln=False, 
+    def __init__(self, dim, proj_drop=0., focal_level=2, focal_window=7, focal_factor=2, use_postln=False,
         use_postln_in_modulation=False, normalize_modulator=False):
 
         super().__init__()
@@ -84,7 +95,7 @@ class FocalModulation(nn.Module):
         """ Forward function.
 
         Args:
-            x: input features with shape of (B, H, W, C)
+            x: input features with shape of (B, H, W, C).
         """
         B, nH, nW, C = x.shape
         x = self.f(x)
@@ -114,20 +125,25 @@ class FocalModulationBlock(nn.Module):
     Args:
         dim (int): Number of input channels.
         mlp_ratio (float): Ratio of mlp hidden dim to embedding dim.
-        drop (float, optional): Dropout rate. Default: 0.0
-        drop_path (float, optional): Stochastic depth rate. Default: 0.0
-        act_layer (nn.Module, optional): Activation layer. Default: nn.GELU
-        norm_layer (nn.Module, optional): Normalization layer.  Default: nn.LayerNorm
-        focal_level (int): number of focal levels
-        focal_window (int): focal kernel size at level 1
+        drop (float, optional): Dropout rate. Default: 0.0.
+        drop_path (float, optional): Stochastic depth rate. Default: 0.0.
+        act_layer (nn.Module, optional): Activation layer. Default: nn.GELU.
+        norm_layer (nn.Module, optional): Normalization layer.  Default: nn.LayerNorm.
+        focal_level (int): Number of focal levels.
+        focal_window (int): Focal kernel size at level 1.
+        use_postln (bool, default=False): Whether to use post-layernorm.
+        use_postln_in_modulation (bool, default=False): Whether to use post-layernorm in modulation.
+        normalize_modulator (bool, default=False): Whether to normalize the modulator.
+        use_layerscale (bool, default=False): Whether to use layer scale.
+        layerscale_value (float, default=1e-4): Initial value for layer scale.
     """
 
-    def __init__(self, dim, mlp_ratio=4., drop=0., drop_path=0., 
+    def __init__(self, dim, mlp_ratio=4., drop=0., drop_path=0.,
                  act_layer=nn.GELU, norm_layer=nn.LayerNorm,
-                 focal_level=2, focal_window=9, 
-                 use_postln=False, use_postln_in_modulation=False, 
-                 normalize_modulator=False, 
-                 use_layerscale=False, 
+                 focal_level=2, focal_window=9,
+                 use_postln=False, use_postln_in_modulation=False,
+                 normalize_modulator=False,
+                 use_layerscale=False,
                  layerscale_value=1e-4):
         super().__init__()
         self.dim = dim
@@ -163,7 +179,6 @@ class FocalModulationBlock(nn.Module):
 
         Args:
             x: Input feature, tensor size (B, H*W, C).
-            H, W: Spatial resolution of the input feature.
         """
         B, L, C = x.shape
         H, W = self.H, self.W
@@ -196,14 +211,18 @@ class BasicLayer(nn.Module):
         dim (int): Number of feature channels
         depth (int): Depths of this stage.
         mlp_ratio (float): Ratio of mlp hidden dim to embedding dim. Default: 4.
-        drop (float, optional): Dropout rate. Default: 0.0
-        drop_path (float | tuple[float], optional): Stochastic depth rate. Default: 0.0
-        norm_layer (nn.Module, optional): Normalization layer. Default: nn.LayerNorm
-        downsample (nn.Module | None, optional): Downsample layer at the end of the layer. Default: None
-        focal_level (int): Number of focal levels
-        focal_window (int): Focal window size at focal level 1
-        use_conv_embed (bool): Use overlapped convolution for patch embedding or now. Default: False
-        use_checkpoint (bool): Whether to use checkpointing to save memory. Default: False
+        drop (float, optional): Dropout rate. Default: 0.0.
+        drop_path (float | tuple[float], optional): Stochastic depth rate. Default: 0.0.
+        norm_layer (nn.Module, optional): Normalization layer. Default: nn.LayerNorm.
+        downsample (nn.Module | None, optional): Downsample layer at the end of the layer. Default: None.
+        focal_level (int): Number of focal levels.
+        focal_window (int): Focal window size at focal level 1.
+        use_conv_embed (bool): Use overlapped convolution for patch embedding or not. Default: False.
+        use_postln (bool, default=False): Whether to use post-layernorm.
+        use_postln_in_modulation (bool, default=False): Whether to use post-layernorm in modulation.
+        normalize_modulator (bool, default=False): Whether to normalize the modulator.
+        use_layerscale (bool, default=False): Whether to use layer scale.
+        use_checkpoint (bool): Whether to use checkpointing to save memory. Default: False.
     """
 
     def __init__(self,
@@ -214,13 +233,13 @@ class BasicLayer(nn.Module):
                  drop_path=0.,
                  norm_layer=nn.LayerNorm,
                  downsample=None,
-                 focal_window=9, 
-                 focal_level=2, 
-                 use_conv_embed=False,     
-                 use_postln=False,          
-                 use_postln_in_modulation=False, 
-                 normalize_modulator=False, 
-                 use_layerscale=False,                   
+                 focal_window=9,
+                 focal_level=2,
+                 use_conv_embed=False,
+                 use_postln=False,
+                 use_postln_in_modulation=False,
+                 normalize_modulator=False,
+                 use_layerscale=False,
                  use_checkpoint=False
         ):
         super().__init__()
@@ -261,7 +280,8 @@ class BasicLayer(nn.Module):
 
         Args:
             x: Input feature, tensor size (B, H*W, C).
-            H, W: Spatial resolution of the input feature.
+            H (int): Height of input feature.
+            W (int): Width of input feature.
         """
 
         for blk in self.blocks:
@@ -287,9 +307,9 @@ class PatchEmbed(nn.Module):
         patch_size (int): Patch token size. Default: 4.
         in_chans (int): Number of input image channels. Default: 3.
         embed_dim (int): Number of linear projection output channels. Default: 96.
-        norm_layer (nn.Module, optional): Normalization layer. Default: None
-        use_conv_embed (bool): Whether use overlapped convolution for patch embedding. Default: False
-        is_stem (bool): Is the stem block or not. 
+        norm_layer (nn.Module, optional): Normalization layer. Default: None.
+        use_conv_embed (bool): Whether use overlapped convolution for patch embedding. Default: False.
+        is_stem (bool): Is the stem block or not.
     """
 
     def __init__(self, patch_size=4, in_chans=3, embed_dim=96, norm_layer=None, use_conv_embed=False, is_stem=False):
@@ -351,9 +371,13 @@ class FocalNet(nn.Module):
         out_indices (Sequence[int]): Output from which stages.
         frozen_stages (int): Stages to be frozen (stop grad and set eval mode).
             -1 means not freezing any parameters.
-        focal_levels (Sequence[int]): Number of focal levels at four stages
-        focal_windows (Sequence[int]): Focal window sizes at first focal level at four stages
-        use_conv_embed (bool): Whether use overlapped convolution for patch embedding
+        focal_levels (Sequence[int]): Number of focal levels at four stages.
+        focal_windows (Sequence[int]): Focal window sizes at first focal level at four stages.
+        use_conv_embed (bool): Whether use overlapped convolution for patch embedding.
+        use_postln (bool, default=False): Whether to use post-layernorm.
+        use_postln_in_modulation (bool, default=False): Whether to use post-layernorm in modulation.
+        use_layerscale (bool, default=False): Whether to use layer scale.
+        normalize_modulator (bool, default=False): Whether to normalize the modulator.
         use_checkpoint (bool): Whether to use checkpointing to save memory. Default: False.
     """
 
@@ -370,14 +394,14 @@ class FocalNet(nn.Module):
                  patch_norm=True,
                  out_indices=(0, 1, 2, 3),
                  frozen_stages=-1,
-                 focal_levels=[3,3,3,3], 
+                 focal_levels=[3,3,3,3],
                  focal_windows=[3,3,3,3],
-                 use_conv_embed=False, 
-                 use_postln=False, 
-                 use_postln_in_modulation=False, 
-                 use_layerscale=False, 
-                 normalize_modulator=False, 
-                 use_checkpoint=False,                  
+                 use_conv_embed=False,
+                 use_postln=False,
+                 use_postln_in_modulation=False,
+                 use_layerscale=False,
+                 normalize_modulator=False,
+                 use_checkpoint=False,
         ):
         super().__init__()
 
@@ -432,6 +456,7 @@ class FocalNet(nn.Module):
         self._freeze_stages()
 
     def _freeze_stages(self):
+      """Freeze stages."""
         if self.frozen_stages >= 0:
             self.patch_embed.eval()
             for param in self.patch_embed.parameters():
@@ -454,6 +479,7 @@ class FocalNet(nn.Module):
         """
 
         def _init_weights(m):
+          """Helper function to initialize weights."""
             if isinstance(m, nn.Linear):
                 trunc_normal_(m.weight, std=.02)
                 if isinstance(m, nn.Linear) and m.bias is not None:
@@ -472,7 +498,15 @@ class FocalNet(nn.Module):
             raise TypeError('pretrained must be a str or None')
 
     def forward(self, x):
-        """Forward function."""
+        """Forward function.
+
+        Args:
+            x (torch.Tensor): Input tensor.
+
+        Returns:
+            Tuple[List[torch.Tensor], torch.Tensor]: A tuple containing the list of output
+            feature maps from selected stages and the patch embedding output.
+        """
         x_emb = self.patch_embed(x)
         Wh, Ww = x_emb.size(2), x_emb.size(3)
 
@@ -499,6 +533,15 @@ class FocalNet(nn.Module):
 
 
 def build_focalnet(modelname, **kw):
+  """Build FocalNet model.
+
+  Args:
+    modelname (str): Name of the FocalNet model.
+    **kw: Additional keyword arguments for the FocalNet model.
+
+  Returns:
+    FocalNet: The FocalNet model.
+  """
     assert modelname in [
         'focalnet_L_384_22k', 
         'focalnet_L_384_22k_fl4', 

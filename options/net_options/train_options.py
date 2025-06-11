@@ -2,7 +2,14 @@ from .base_options import BaseOptions
 
 
 class TrainOptions(BaseOptions):
+  """Training-specific command-line options.
+
+  This class inherits from BaseOptions (network-specific options) and
+  adds arguments relevant to the training process, such as display frequencies,
+  saving frequencies, learning rate, batch size, data augmentation, and loss weights.
+  """
     def initialize(self):
+      """Initializes training-specific command-line arguments."""
         BaseOptions.initialize(self)
         # for displays
         self.parser.add_argument('--display_freq', type=int, default=100,

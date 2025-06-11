@@ -15,9 +15,25 @@ from timm.models.layers import DropPath
 
 
 class LayerNormFunction(torch.autograd.Function):
+  """Custom Layer Normalization function.
+
+  This function is used to implement LayerNorm2d.
+  """
 
     @staticmethod
     def forward(ctx, x, weight, bias, eps):
+      """Forward pass for Layer Normalization.
+
+      Args:
+        ctx: Context object to save tensors for backward pass.
+        x: Input tensor.
+        weight: Weight tensor.
+        bias: Bias tensor.
+        eps: Epsilon value for numerical stability.
+
+      Returns:
+        Normalized tensor.
+      """
         ctx.eps = eps
         N, C, H, W = x.size()
         mu = x.mean(1, keepdim=True)
@@ -29,6 +45,15 @@ class LayerNormFunction(torch.autograd.Function):
 
     @staticmethod
     def backward(ctx, grad_output):
+      """Backward pass for Layer Normalization.
+
+      Args:
+        ctx: Context object with saved tensors from forward pass.
+        grad_output: Gradient of the output.
+
+      Returns:
+        Gradients for input, weight, bias, and None for eps.
+      """
         eps = ctx.eps
 
         N, C, H, W = grad_output.size()
@@ -42,6 +67,12 @@ class LayerNormFunction(torch.autograd.Function):
             dim=0), None
 
 class LayerNorm2d(nn.Module):
+  """Layer Normalization for 2D inputs.
+
+  Args:
+    channels: Number of channels in the input tensor.
+    eps: Epsilon value for numerical stability.
+  """
 
     def __init__(self, channels, eps=1e-6):
         super(LayerNorm2d, self).__init__()
@@ -50,17 +81,47 @@ class LayerNorm2d(nn.Module):
         self.eps = eps
 
     def forward(self, x):
+      """Forward pass for LayerNorm2d.
+
+      Args:
+        x: Input tensor.
+
+      Returns:
+        Normalized tensor.
+      """
         return LayerNormFunction.apply(x, self.weight, self.bias, self.eps)
 
 class SimpleGate(nn.Module):
+  """Simple gate mechanism.
+
+  Splits the input tensor into two halves along the channel dimension and multiplies them element-wise.
+  """
     def forward(self, x):
+      """Forward pass for SimpleGate.
+
+      Args:
+        x: Input tensor.
+
+      Returns:
+        Gated tensor.
+      """
         x1, x2 = x.chunk(2, dim=1)
         return x1 * x2
 
 class NAFBlock(nn.Module):
+  """NAFNet block.
+
+  Args:
+    dim: Number of input channels.
+    expand_dim: Expansion factor for depth-wise and point-wise convolutions.
+    out_dim: Number of output channels.
+    kernel_size: Kernel size for the depth-wise convolution.
+    layer_scale_init_value: Initial value for layer scale.
+    drop_path: Dropout rate for stochastic depth.
+  """
     def __init__(self, dim, expand_dim, out_dim, kernel_size=3, layer_scale_init_value=1e-6, drop_path=0.):
         super().__init__()
-        drop_out_rate = 0. 
+        drop_out_rate = 0.
         dw_channel = expand_dim
         self.conv1 = nn.Conv2d(in_channels=dim, out_channels=dw_channel, kernel_size=1, padding=0, stride=1, groups=1, bias=True)
         self.conv2 = nn.Conv2d(in_channels=dw_channel, out_channels=dw_channel, kernel_size=kernel_size, padding=1, stride=1, groups=dw_channel,
@@ -91,6 +152,14 @@ class NAFBlock(nn.Module):
         self.gamma = nn.Parameter(torch.ones((1, dim, 1, 1)) * layer_scale_init_value, requires_grad=True)
 
     def forward(self, inp):
+      """Forward pass for NAFBlock.
+
+      Args:
+        inp: Input tensor.
+
+      Returns:
+        Output tensor.
+      """
         x = inp
 
         x = self.norm1(x)
@@ -115,6 +184,13 @@ class NAFBlock(nn.Module):
 
 
 class UpSampleConvnext(nn.Module):
+  """Up-sampling module with ConvNeXt style channel rescheduling.
+
+  Args:
+    ratio: Up-sampling ratio.
+    inchannel: Number of input channels.
+    outchannel: Number of output channels.
+  """
     def __init__(self, ratio, inchannel, outchannel):
         super().__init__()
         self.ratio = ratio
@@ -124,6 +200,14 @@ class UpSampleConvnext(nn.Module):
                                         LayerNorm(outchannel, eps=1e-6, data_format="channels_last"))
         self.upsample  = nn.Upsample(scale_factor=2**ratio, mode='bilinear')
     def forward(self, x):
+      """Forward pass for UpSampleConvnext.
+
+      Args:
+        x: Input tensor.
+
+      Returns:
+        Up-sampled tensor.
+      """
         x = x.permute(0, 2, 3, 1)
         x = self.channel_reschedule(x)
         x = x = x.permute(0, 3, 1, 2)
@@ -137,6 +221,18 @@ class LayerNorm(nn.Module):
     with shape (batch_size, channels, height, width).
     """
     def __init__(self, normalized_shape, eps=1e-6, data_format="channels_first", elementwise_affine = True):
+      """Initializes LayerNorm.
+
+      Args:
+        normalized_shape: Input shape from an expected input of size.
+                          If a single integer is used, it is treated as a singleton list, and LayerNorm will normalize
+                          over the last dimension of size 'normalized_shape'.
+        eps: A value added to the denominator for numerical stability. Default: 1e-6.
+        data_format: Either "channels_last" or "channels_first". Default: "channels_first".
+        elementwise_affine: A boolean value that when set to True, this module
+                              has learnable per-element affine parameters initialized to ones (for weights)
+                              and zeros (for biases). Default: True.
+      """
         super().__init__()
         self.elementwise_affine = elementwise_affine
         if elementwise_affine:
@@ -149,6 +245,14 @@ class LayerNorm(nn.Module):
         self.normalized_shape = (normalized_shape, )
     
     def forward(self, x):
+      """Forward pass for LayerNorm.
+
+      Args:
+        x: Input tensor.
+
+      Returns:
+        Normalized tensor.
+      """
         if self.data_format == "channels_last":
             return F.layer_norm(x, self.normalized_shape, self.weight, self.bias, self.eps)
         elif self.data_format == "channels_first":
@@ -168,7 +272,7 @@ class ConvNextBlock(nn.Module):
     
     Args:
         dim (int): Number of input channels.
-        drop_path (float): Stochastic depth rate. Default: 0.0
+        drop_path (float): Stochastic depth rate. Default: 0.0.
         layer_scale_init_value (float): Init value for Layer Scale. Default: 1e-6.
     """
     def __init__(self, in_channel, hidden_dim, out_channel, kernel_size=3, layer_scale_init_value=1e-6, drop_path= 0.0):
@@ -183,6 +287,14 @@ class ConvNextBlock(nn.Module):
         self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
     def forward(self, x):
+      """Forward pass for ConvNextBlock.
+
+      Args:
+        x: Input tensor.
+
+      Returns:
+        Output tensor.
+      """
         input = x
         x = self.dwconv(x)
         x = x.permute(0, 2, 3, 1) # (N, C, H, W) -> (N, H, W, C)
@@ -198,6 +310,14 @@ class ConvNextBlock(nn.Module):
         return x
 
 class Decoder(nn.Module):
+  """Decoder module for feature reconstruction.
+
+  Args:
+    depth: A list of depths for each decoder stage.
+    dim: A list of channel numbers for each decoder stage.
+    block_type: The type of block to use in the decoder (e.g., NAFBlock).
+    kernel_size: The kernel size for the blocks.
+  """
     def __init__(self, depth=[2,2,2,2], dim=[112, 72, 40, 24], block_type = None, kernel_size = 3) -> None:
         super().__init__()
         self.depth = depth
@@ -220,6 +340,13 @@ class Decoder(nn.Module):
         )
         
     def _build_decode_layer(self, dim, depth, kernel_size):
+      """Builds the decoder layers.
+
+      Args:
+        dim: A list of channel numbers for each decoder stage.
+        depth: A list of depths for each decoder stage.
+        kernel_size: The kernel size for the blocks.
+      """
         normal_layers = nn.ModuleList()
         upsample_layers = nn.ModuleList()
         proj_layers = nn.ModuleList()
@@ -249,11 +376,31 @@ class Decoder(nn.Module):
         self.proj_layers = proj_layers
 
     def _forward_stage(self, stage, x):
+      """Forward pass for a single decoder stage.
+
+      Args:
+        stage: The current decoder stage index.
+        x: Input tensor for the stage.
+
+      Returns:
+        Output tensor of the stage.
+      """
         x = self.proj_layers[stage](x)
         x = self.upsample_layers[stage](x)
         return self.normal_layers[stage](x)
 
     def forward(self, c3, c2, c1, c0):
+      """Forward pass for the Decoder.
+
+      Args:
+        c3: Features from the third encoder level.
+        c2: Features from the second encoder level.
+        c1: Features from the first encoder level.
+        c0: Features from the zeroth encoder level.
+
+      Returns:
+        A tensor containing the concatenated clean and reflection outputs.
+      """
         c0_clean, c0_ref = c0, c0 
         c1_clean, c1_ref = c1, c1 
         c2_clean, c2_ref = c2, c2 
@@ -272,6 +419,12 @@ class Decoder(nn.Module):
         return x
 
 class SimDecoder(nn.Module):
+  """Simple Decoder module.
+
+  Args:
+    in_channel: Number of input channels.
+    encoder_stride: Stride of the encoder.
+  """
     def __init__(self, in_channel, encoder_stride) -> None:
         super().__init__()
         self.projback = nn.Sequential(
@@ -283,15 +436,31 @@ class SimDecoder(nn.Module):
         )
 
     def forward(self, c3):
+      """Forward pass for SimDecoder.
+
+      Args:
+        c3: Input tensor from the encoder.
+
+      Returns:
+        Reconstructed output tensor.
+      """
         return self.projback(c3)
     
 
 class StarReLU(nn.Module):
     """
     StarReLU: s * relu(x) ** 2 + b
+
+  Args:
+    scale_value: Initial value for the scale parameter.
+    bias_value: Initial value for the bias parameter.
+    scale_learnable: Whether the scale parameter is learnable.
+    bias_learnable: Whether the bias parameter is learnable.
+    mode: Not used.
+    inplace: Whether to perform the ReLU operation in-place.
     """
     def __init__(self, scale_value=1.0, bias_value=0.0,
-        scale_learnable=True, bias_learnable=True, 
+        scale_learnable=True, bias_learnable=True,
         mode=None, inplace=True):
         super().__init__()
         self.inplace = inplace
@@ -301,4 +470,12 @@ class StarReLU(nn.Module):
         self.bias = nn.Parameter(bias_value * torch.ones(1),
             requires_grad=bias_learnable)
     def forward(self, x):
+      """Forward pass for StarReLU.
+
+      Args:
+        x: Input tensor.
+
+      Returns:
+        Output tensor.
+      """
         return self.scale * self.relu(x)**2 + self.bias

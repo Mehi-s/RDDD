@@ -1,3 +1,17 @@
+"""
+This script is used for testing a Single Image Reflection Separation (SIRS) model.
+
+It performs the following steps:
+1. Parses command-line options using `TrainOptions` (though `isTrain` is set to False).
+2. Sets up CUDA and benchmark flags.
+3. Defines paths to various test datasets (real20, SolidObjectDataset, PostcardDataset, WildSceneDataset).
+4. Creates `DSRTestDataset` instances for each test set.
+5. Creates `DataLoader` instances for each dataset.
+6. Initializes an `Engine` with the provided options and datasets.
+7. Creates a results directory with a timestamp.
+8. Calls the `engine.eval()` method for each test dataset to evaluate the model
+   and save the results (metrics and output images) in respective subdirectories.
+"""
 import os
 from os.path import join
 

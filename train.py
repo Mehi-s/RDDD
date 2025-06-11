@@ -12,6 +12,34 @@ from tools import mutils
 import data.new_dataset as datasets
 import wandb
 faulthandler.enable()
+
+"""
+This script is the main entry point for training a reflection removal model.
+
+It performs the following key steps:
+1.  **Parses Command-Line Options**: Uses `TrainOptions` to get all necessary
+    configurations for the training process (e.g., learning rate, batch size,
+    dataset paths, model parameters).
+2.  **Initializes Datasets and DataLoaders**:
+    -   Loads synthetic training data (VOC2012 based).
+    -   Loads real-world training data (real and nature images).
+    -   Creates a `FusionDataset` to combine these training sources based on
+        specified ratios.
+    -   Sets up `DataLoader` for the fused training data.
+    -   Initializes multiple evaluation datasets (real20, solidobject, postcard, wild)
+        and their corresponding DataLoaders.
+3.  **Initializes Training Engine**: Creates an `Engine` instance which encapsulates
+    the model, optimizer, and training/evaluation logic.
+4.  **Handles Resuming and Initial Evaluation**: If the `--resume` or `--debug_eval`
+    option is provided, it performs an initial evaluation on all test sets.
+5.  **Defines Training Strategy**:
+    -   Sets the GAN loss lambda to 0 (can be adjusted for different training phases).
+    -   Sets the initial learning rate.
+6.  **Main Training Loop**: Iterates for a predefined number of epochs (currently up to 20),
+    calling `engine.train()` for each epoch with the fused training data.
+    The `engine.train()` method itself handles per-iteration optimization, logging,
+    and periodic evaluation based on frequencies defined in the options.
+"""
 opt = TrainOptions().parse()
 cudnn.benchmark = True
 opt.lambda_gan = 0
@@ -81,6 +109,11 @@ result_dir = os.path.join(f'./experiment/{opt.name}/results',
 
 
 def set_learning_rate(lr):
+  """Sets the learning rate for all optimizers in the model.
+
+  Args:
+    lr (float): The new learning rate to set.
+  """
     for optimizer in engine.model.optimizers:
         print('[i] set learning rate to {}'.format(lr))
         util.set_opt_param(optimizer, 'lr', lr)

@@ -12,6 +12,18 @@ import numpy as np
 from tools import mutils
 
 class Engine(object):
+  """Manages the training and evaluation process for a model.
+
+  This class handles model initialization, training loops, evaluation on various
+  datasets, TensorBoard logging, and saving model checkpoints and results.
+
+  Args:
+    opt: Command-line options and configurations.
+    eval_dataset_real: DataLoader for the real evaluation dataset.
+    eval_dataset_solidobject: DataLoader for the solid object evaluation dataset.
+    eval_dataset_postcard: DataLoader for the postcard evaluation dataset.
+    eval_dataloader_wild: DataLoader for the wild evaluation dataset.
+  """
     def __init__(self, opt,eval_dataset_real,eval_dataset_solidobject,eval_dataset_postcard,eval_dataloader_wild):
         self.opt = opt
         self.writer = None
@@ -28,6 +40,7 @@ class Engine(object):
         self.__setup()
 
     def __setup(self):
+      """Initializes directories, model, TensorBoard writer, and visualizer."""
         self.basedir = join('experiment', self.opt.name)
         os.makedirs(self.basedir, exist_ok=True)
 
@@ -42,6 +55,15 @@ class Engine(object):
             self.visualizer = Visualizer(opt)
 
     def train(self, train_loader, **kwargs):
+      """Runs one epoch of training.
+
+      Iterates through the training data, performs model optimization,
+      logs results, saves visualizations, and saves model checkpoints.
+
+      Args:
+        train_loader: DataLoader for the training dataset.
+        **kwargs: Additional arguments to be passed to `model.optimize_parameters()`.
+      """
         print('\nEpoch: %d' % self.epoch)
         avg_meters = util.AverageMeters()
         opt = self.opt
@@ -116,6 +138,22 @@ class Engine(object):
             pass
 
     def eval(self, val_loader, dataset_name, savedir='./tmp', loss_key=None, **kwargs):
+      """Evaluates the model on a given dataset.
+
+      Iterates through the validation data, performs evaluation, logs metrics,
+      and optionally saves results and best model checkpoints.
+
+      Args:
+        val_loader: DataLoader for the validation dataset.
+        dataset_name (str): Name of the dataset (e.g., 'testdata_real20').
+        savedir (str, optional): Directory to save evaluation results. Defaults to './tmp'.
+        loss_key (str, optional): The key for the primary validation loss metric
+                                 used for saving the best model. Defaults to None.
+        **kwargs: Additional arguments to be passed to `model.eval()`.
+
+      Returns:
+        util.AverageMeters: An object containing the averaged evaluation metrics.
+      """
         # print(dataset_name)
         if savedir is not None:
             os.makedirs(savedir, exist_ok=True)
@@ -151,6 +189,15 @@ class Engine(object):
         return avg_meters
 
     def test(self, test_loader, savedir=None, **kwargs):
+      """Tests the model on a given dataset.
+
+      Iterates through the test data and saves the model outputs.
+
+      Args:
+        test_loader: DataLoader for the test dataset.
+        savedir (str, optional): Directory to save test results. Defaults to None.
+        **kwargs: Additional arguments to be passed to `model.test()`.
+      """
         model = self.model
         opt = self.opt
         with torch.no_grad():
@@ -159,20 +206,29 @@ class Engine(object):
                 util.progress_bar(i, len(test_loader))
 
     def save_eval(self, label):
+      """Saves the model state for evaluation purposes.
+
+      Args:
+        label (str): A label for the saved model file.
+      """
         self.model.save_eval(label)
 
     @property
     def iterations(self):
+      """Current number of training iterations."""
         return self.model.iterations
 
     @iterations.setter
     def iterations(self, i):
+      """Sets the current number of training iterations."""
         self.model.iterations = i
 
     @property
     def epoch(self):
+      """Current epoch number."""
         return self.model.epoch
 
     @epoch.setter
     def epoch(self, e):
+      """Sets the current epoch number."""
         self.model.epoch = e
