@@ -7,11 +7,18 @@ model_names = sorted(name for name in models.__dict__
 
 
 class BaseOptions():
+  """Base class for handling command-line options.
+
+  This class initializes an ArgumentParser and defines a set of common
+  command-line arguments used in various experiments.
+  """
     def __init__(self):
+      """Initializes the BaseOptions class."""
         self.parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
         self.initialized = False
 
     def initialize(self):
+      """Defines the common command-line arguments."""
         # experiment specifics
         self.parser.add_argument('--name', type=str, default='ytmt_ucs_sirs',
                                  help='name of the experiment. It decides where to store samples and models')

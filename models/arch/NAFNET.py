@@ -21,9 +21,25 @@ import sys
 sys.path.append('/ghome/zhuyr/Deref_RW/networks/')
 
 class LayerNormFunction(torch.autograd.Function):
+  """Custom Layer Normalization function.
+
+  This function is used to implement LayerNorm2d.
+  """
 
     @staticmethod
     def forward(ctx, x, weight, bias, eps):
+      """Forward pass for Layer Normalization.
+
+      Args:
+        ctx: Context object to save tensors for backward pass.
+        x: Input tensor.
+        weight: Weight tensor.
+        bias: Bias tensor.
+        eps: Epsilon value for numerical stability.
+
+      Returns:
+        Normalized tensor.
+      """
         ctx.eps = eps
         N, C, H, W = x.size()
         mu = x.mean(1, keepdim=True)
@@ -35,6 +51,15 @@ class LayerNormFunction(torch.autograd.Function):
 
     @staticmethod
     def backward(ctx, grad_output):
+      """Backward pass for Layer Normalization.
+
+      Args:
+        ctx: Context object with saved tensors from forward pass.
+        grad_output: Gradient of the output.
+
+      Returns:
+        Gradients for input, weight, bias, and None for eps.
+      """
         eps = ctx.eps
 
         N, C, H, W = grad_output.size()
@@ -48,6 +73,12 @@ class LayerNormFunction(torch.autograd.Function):
             dim=0), None
 
 class LayerNorm2d(nn.Module):
+  """Layer Normalization for 2D inputs.
+
+  Args:
+    channels: Number of channels in the input tensor.
+    eps: Epsilon value for numerical stability.
+  """
 
     def __init__(self, channels, eps=1e-6):
         super(LayerNorm2d, self).__init__()
@@ -56,14 +87,42 @@ class LayerNorm2d(nn.Module):
         self.eps = eps
 
     def forward(self, x):
+      """Forward pass for LayerNorm2d.
+
+      Args:
+        x: Input tensor.
+
+      Returns:
+        Normalized tensor.
+      """
         return LayerNormFunction.apply(x, self.weight, self.bias, self.eps)
 
 class SimpleGate(nn.Module):
+  """Simple gate mechanism.
+
+  Splits the input tensor into two halves along the channel dimension and multiplies them element-wise.
+  """
     def forward(self, x):
+      """Forward pass for SimpleGate.
+
+      Args:
+        x: Input tensor.
+
+      Returns:
+        Gated tensor.
+      """
         x1, x2 = x.chunk(2, dim=1)
         return x1 * x2
 
 class NAFBlock(nn.Module):
+  """NAFNet block.
+
+  Args:
+    c: Number of channels.
+    DW_Expand: Expansion factor for depth-wise convolution.
+    FFN_Expand: Expansion factor for feed-forward network.
+    drop_out_rate: Dropout rate.
+  """
     def __init__(self, c, DW_Expand=2, FFN_Expand=2, drop_out_rate=0.):
         super().__init__()
         dw_channel = c * DW_Expand
@@ -96,6 +155,14 @@ class NAFBlock(nn.Module):
         self.gamma = nn.Parameter(torch.zeros((1, c, 1, 1)), requires_grad=True)
 
     def forward(self, inp):
+      """Forward pass for NAFBlock.
+
+      Args:
+        inp: Input tensor.
+
+      Returns:
+        Output tensor.
+      """
         x = inp
 
         x = self.norm1(x)
@@ -120,6 +187,18 @@ class NAFBlock(nn.Module):
 
 
 class NAFNet(nn.Module):
+  """NAFNet model for image restoration.
+
+  Args:
+    img_channel: Number of input image channels.
+    width: Width of the network.
+    middle_blk_num: Number of blocks in the middle stage.
+    enc_blk_nums: List of number of blocks in each encoder stage.
+    dec_blk_nums: List of number of blocks in each decoder stage.
+    global_residual: Whether to use global residual connection.
+    drop_flag: Whether to use dropout.
+    drop_rate: Dropout rate.
+  """
 
     def __init__(self, img_channel=3, width=32, middle_blk_num=1, enc_blk_nums=[1, 1, 1, 28],
                  dec_blk_nums=[1, 1, 1, 1], global_residual = False, drop_flag = False, drop_rate = 0.4):
@@ -175,6 +254,14 @@ class NAFNet(nn.Module):
         self.padder_size = 2 ** len(self.encoders)
 
     def forward(self, inp):
+      """Forward pass for NAFNet.
+
+      Args:
+        inp: Input tensor.
+
+      Returns:
+        Restored image tensor.
+      """
         B, C, H, W = inp.shape
         inp = self.check_image_size(inp)
         base_inp = inp[:, :3, :, :]
@@ -206,6 +293,14 @@ class NAFNet(nn.Module):
         return x[:, :, :H, :W]
 
     def check_image_size(self, x):
+      """Pads the input image to be divisible by the padder size.
+
+      Args:
+        x: Input image tensor.
+
+      Returns:
+        Padded image tensor.
+      """
         _, _, h, w = x.size()
         mod_pad_h = (self.padder_size - h % self.padder_size) % self.padder_size
         mod_pad_w = (self.padder_size - w % self.padder_size) % self.padder_size
@@ -215,6 +310,23 @@ class NAFNet(nn.Module):
 
 
 class NAFNet_wDetHead(nn.Module):
+  """NAFNet model with a detection head for sparse reference.
+
+  Args:
+    img_channel: Number of input image channels.
+    width: Width of the network.
+    middle_blk_num: Number of blocks in the middle stage.
+    enc_blk_nums: List of number of blocks in each encoder stage.
+    dec_blk_nums: List of number of blocks in each decoder stage.
+    global_residual: Whether to use global residual connection.
+    drop_flag: Whether to use dropout.
+    drop_rate: Dropout rate.
+    concat: Whether to concatenate image features and sparse reference features.
+    merge_manner: Manner of merging image features and sparse reference features.
+                  0: Concatenate and convolve.
+                  1: Add and convolve.
+                  2: Multiply, add, and convolve.
+  """
 
     def __init__(self, img_channel=3, width=32, middle_blk_num=1, enc_blk_nums=[1, 1, 1, 28],
                  dec_blk_nums=[1, 1, 1, 1], global_residual = False, drop_flag = False, drop_rate = 0.4,
@@ -286,6 +398,15 @@ class NAFNet_wDetHead(nn.Module):
         self.padder_size = 2 ** len(self.encoders)
 
     def forward(self, inp, spare_ref):
+      """Forward pass for NAFNet_wDetHead.
+
+      Args:
+        inp: Input image tensor.
+        spare_ref: Sparse reference tensor.
+
+      Returns:
+        Restored image tensor.
+      """
         B, C, H, W = inp.shape
         inp = self.check_image_size(inp)
         base_inp = inp #[:, :3, :, :]
@@ -332,6 +453,14 @@ class NAFNet_wDetHead(nn.Module):
         return x[:, :, :H, :W]
 
     def check_image_size(self, x):
+      """Pads the input image to be divisible by the padder size.
+
+      Args:
+        x: Input image tensor.
+
+      Returns:
+        Padded image tensor.
+      """
         _, _, h, w = x.size()
         mod_pad_h = (self.padder_size - h % self.padder_size) % self.padder_size
         mod_pad_w = (self.padder_size - w % self.padder_size) % self.padder_size
@@ -340,6 +469,16 @@ class NAFNet_wDetHead(nn.Module):
 
 
 class NAFNet_refine(nn.Module):
+  """NAFNet model for refinement.
+
+  Args:
+    img_channel: Number of input image channels (concatenated input and previous prediction).
+    width: Width of the network.
+    middle_blk_num: Number of blocks in the middle stage.
+    enc_blk_nums: List of number of blocks in each encoder stage.
+    dec_blk_nums: List of number of blocks in each decoder stage.
+    global_residual: Whether to use global residual connection.
+  """
 
     def __init__(self, img_channel=6, width=32, middle_blk_num=1, enc_blk_nums=[1, 1, 1, 28],
                  dec_blk_nums=[1, 1, 1, 1], global_residual = False):
@@ -391,6 +530,15 @@ class NAFNet_refine(nn.Module):
         self.padder_size = 2 ** len(self.encoders)
 
     def forward(self, inp, pre_pred):
+      """Forward pass for NAFNet_refine.
+
+      Args:
+        inp: Input image tensor.
+        pre_pred: Previous prediction tensor.
+
+      Returns:
+        Refined image tensor.
+      """
         B, C, H, W = inp.shape
         inp = self.check_image_size(inp)
         pre_pred = self.check_image_size(pre_pred)
@@ -423,6 +571,14 @@ class NAFNet_refine(nn.Module):
         return x[:, :, :H, :W]
 
     def check_image_size(self, x):
+      """Pads the input image to be divisible by the padder size.
+
+      Args:
+        x: Input image tensor.
+
+      Returns:
+        Padded image tensor.
+      """
         _, _, h, w = x.size()
         mod_pad_h = (self.padder_size - h % self.padder_size) % self.padder_size
         mod_pad_w = (self.padder_size - w % self.padder_size) % self.padder_size
@@ -431,6 +587,11 @@ class NAFNet_refine(nn.Module):
 
 
 def print_param_number(net):
+  """Prints the number of parameters in a network.
+
+  Args:
+    net: The input network.
+  """
     print('#generator parameters:', sum(param.numel() for param in net.parameters()))
 if __name__ == '__main__':
     img_channel = 3

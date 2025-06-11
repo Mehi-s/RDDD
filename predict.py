@@ -16,6 +16,14 @@ import torch
 from PIL import Image # Moved here as it's a primary dependency
 
 def parse_args():
+  """Parses command-line arguments for the prediction script.
+
+  Defines arguments for model path, image path, output path, GPU IDs, and loss column.
+  It also handles parsing and validation of GPU IDs.
+
+  Returns:
+    argparse.Namespace: An object containing the parsed command-line arguments.
+  """
     parser = argparse.ArgumentParser(description="Image-to-Image Translation Prediction Script")
     parser.add_argument('--model_path', type=str, required=True,
                         help='Path to the pre-trained model checkpoint file (.pth). This is typically for the classifier network (net_c).')
@@ -114,6 +122,12 @@ if __name__ == '__main__':
     # Many of these are defaults from training scripts and may not all be strictly necessary for inference,
     # but are included for compatibility with the model's initialization code.
     class Options:
+      """
+      A configuration class that mimics the 'opt' namespace typically used during
+      training. This allows the prediction script to initialize models in a way
+      that is consistent with how they were trained, even if only a subset of
+      these options are strictly required for inference.
+      """
         def __init__(self):
             # --- Essential settings for prediction ---
             self.gpu_ids = args.gpu_ids         # Parsed list of integer GPU IDs (empty for CPU)

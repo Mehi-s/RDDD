@@ -17,6 +17,15 @@ from data.transforms import to_tensor
 
 
 def __scale_width(img, target_width):
+  """Scales the width of an image to a target width.
+
+  Args:
+    img: The input image.
+    target_width: The target width.
+
+  Returns:
+    The scaled image.
+  """
     ow, oh = img.size
     if (ow == target_width):
         return img
@@ -27,6 +36,15 @@ def __scale_width(img, target_width):
 
 
 def __scale_height(img, target_height):
+  """Scales the height of an image to a target height.
+
+  Args:
+    img: The input image.
+    target_height: The target height.
+
+  Returns:
+    The scaled image.
+  """
     ow, oh = img.size
     if (oh == target_height):
         return img
@@ -37,6 +55,16 @@ def __scale_height(img, target_height):
 
 
 def paired_data_transforms(img_1, img_2, unaligned_transforms=False):
+  """Applies paired data transformations to two images.
+
+  Args:
+    img_1: The first image.
+    img_2: The second image.
+    unaligned_transforms: Whether to apply unaligned transforms.
+
+  Returns:
+    A tuple containing the transformed images.
+  """
     def get_params(img, output_size):
         w, h = img.size
         th, tw = output_size
@@ -81,7 +109,13 @@ def paired_data_transforms(img_1, img_2, unaligned_transforms=False):
 
 
 class ReflectionSynthesis(object):
+  """Synthesizes a reflection image from a transmission layer and a reflection layer."""
     def __init__(self):
+        """Initializes the ReflectionSynthesis class.
+
+        Sets the kernel sizes and probabilities for Gaussian blur,
+        as well as the sigma, alpha, and beta ranges.
+        """
         # Kernel Size of the Gaussian Blurry
         self.kernel_sizes = [5, 7, 9, 11]
         self.kernel_probs = [0.1, 0.2, 0.3, 0.4]
@@ -92,6 +126,15 @@ class ReflectionSynthesis(object):
         self.beta_range = [0.4, 1.0]
 
     def __call__(self, T_, R_):
+        """Applies reflection synthesis to the input images.
+
+        Args:
+          T_: The transmission layer image.
+          R_: The reflection layer image.
+
+        Returns:
+          A tuple containing the transmission layer, reflection layer, and synthesized image.
+        """
         T_ = np.asarray(T_, np.float32) / 255.
         R_ = np.asarray(R_, np.float32) / 255.
 
@@ -120,17 +163,35 @@ class ReflectionSynthesis(object):
 
 
 class DataLoader(torch.utils.data.DataLoader):
+  """Data loader for the DSR dataset.
+
+  Args:
+    dataset: The dataset to load.
+    batch_size: The batch size.
+    shuffle: Whether to shuffle the data.
+    *args: Variable length argument list.
+    **kwargs: Arbitrary keyword arguments.
+  """
     def __init__(self, dataset, batch_size, shuffle, *args, **kwargs):
         super(DataLoader, self).__init__(dataset, batch_size, shuffle, *args, **kwargs)
         self.shuffle = shuffle
 
     def reset(self):
+      """Resets the dataset by reshuffling it."""
         if self.shuffle:
             print('Reset Dataset...')
             self.dataset.reset()
 
 
 class DSRDataset(BaseDataset):
+  """Dataset for DSR (Deep Shadow Removal).
+
+  Args:
+    datadir: The directory containing the data.
+    fns: A list of filenames. If None, all files in the directory will be used.
+    size: The maximum number of images to use. If None, all images will be used.
+    enable_transforms: Whether to enable data augmentation.
+  """
     def __init__(self, datadir, fns=None, size=None, enable_transforms=True):
         super(DSRDataset, self).__init__()
         self.size = size
@@ -145,6 +206,11 @@ class DSRDataset(BaseDataset):
         self.reset(shuffle=False)
 
     def reset(self, shuffle=True):
+      """Resets the dataset by reshuffling the paths.
+
+      Args:
+        shuffle: Whether to shuffle the paths.
+      """
         if shuffle:
             random.shuffle(self.paths)
         num_paths = len(self.paths) // 2
@@ -152,6 +218,15 @@ class DSRDataset(BaseDataset):
         self.R_paths = self.paths[num_paths:2 * num_paths]
 
     def data_synthesis(self, t_img, r_img):
+      """Synthesizes a mixed image from a transmission image and a reflection image.
+
+      Args:
+        t_img: The transmission image.
+        r_img: The reflection image.
+
+      Returns:
+        A tuple containing the transmission tensor, reflection tensor, and mixed tensor.
+      """
         if self.enable_transforms:
             t_img, r_img = paired_data_transforms(t_img, r_img)
 
@@ -164,6 +239,15 @@ class DSRDataset(BaseDataset):
         return B, R, M
 
     def __getitem__(self, index):
+      """Returns the item at the given index.
+
+      Args:
+        index: The index of the item to return.
+
+      Returns:
+        A dictionary containing the input image, target transmission layer, target reflection layer,
+        filename, and a boolean indicating whether the image is real or synthetic.
+      """
         index_B = index % len(self.B_paths)
         index_R = index % len(self.R_paths)
 
@@ -178,6 +262,7 @@ class DSRDataset(BaseDataset):
         return {'input': M, 'target_t': B, 'target_r': M-B, 'fn': fn, 'real': False}
 
     def __len__(self):
+      """Returns the length of the dataset."""
         if self.size is not None:
             return min(max(len(self.B_paths), len(self.R_paths)), self.size)
         else:
@@ -185,6 +270,18 @@ class DSRDataset(BaseDataset):
 
 
 class DSRTestDataset(BaseDataset):
+  """Dataset for DSR testing.
+
+  Args:
+    datadir: The directory containing the data.
+    fns: A list of filenames. If None, all files in the 'blended' subdirectory will be used.
+    size: The maximum number of images to use. If None, all images will be used.
+    enable_transforms: Whether to enable data augmentation.
+    unaligned_transforms: Whether to apply unaligned transforms.
+    round_factor: The factor to round the image dimensions to.
+    flag: A flag to add to the output dictionary.
+    if_align: Whether to align the images.
+  """
     def __init__(self, datadir, fns=None, size=None, enable_transforms=False, unaligned_transforms=False,
                  round_factor=1, flag=None, if_align=True):
         super(DSRTestDataset, self).__init__()
@@ -201,6 +298,15 @@ class DSRTestDataset(BaseDataset):
             self.fns = self.fns[:size]
 
     def align(self, x1, x2):
+      """Aligns two images by resizing them to the same dimensions.
+
+      Args:
+        x1: The first image.
+        x2: The second image.
+
+      Returns:
+        A tuple containing the aligned images.
+      """
         h, w = x1.height, x1.width
         h, w = h // 32 * 32, w // 32 * 32
         x1 = x1.resize((w, h))
@@ -208,6 +314,16 @@ class DSRTestDataset(BaseDataset):
         return x1, x2
 
     def __getitem__(self, index):
+      """Returns the item at the given index.
+
+      Args:
+        index: The index of the item to return.
+
+      Returns:
+        A dictionary containing the input image, target transmission layer, filename,
+        a boolean indicating whether the image is real, and the target reflection layer.
+        If a flag is provided, it is also included in the dictionary.
+      """
         fn = self.fns[index]
 
         t_img = Image.open(join(self.datadir, 'transmission_layer', fn)).convert('RGB')
@@ -228,6 +344,7 @@ class DSRTestDataset(BaseDataset):
         return dic
 
     def __len__(self):
+      """Returns the length of the dataset."""
         if self.size is not None:
             return min(len(self.fns), self.size)
         else:
@@ -235,6 +352,14 @@ class DSRTestDataset(BaseDataset):
 
 
 class SIRTestDataset(BaseDataset):
+  """Dataset for SIR (Single Image Reflection Removal) testing.
+
+  Args:
+    datadir: The directory containing the data.
+    fns: A list of filenames. If None, all files in the 'blended' subdirectory will be used.
+    size: The maximum number of images to use. If None, all images will be used.
+    if_align: Whether to align the images.
+  """
     def __init__(self, datadir, fns=None, size=None, if_align=True):
         super(SIRTestDataset, self).__init__()
         self.size = size
@@ -246,6 +371,16 @@ class SIRTestDataset(BaseDataset):
             self.fns = self.fns[:size]
 
     def align(self, x1, x2, x3):
+      """Aligns three images by resizing them to the same dimensions.
+
+      Args:
+        x1: The first image.
+        x2: The second image.
+        x3: The third image.
+
+      Returns:
+        A tuple containing the aligned images.
+      """
         h, w = x1.height, x1.width
         h, w = h // 32 * 32, w // 32 * 32
         x1 = x1.resize((w, h))
@@ -254,6 +389,16 @@ class SIRTestDataset(BaseDataset):
         return x1, x2, x3
 
     def __getitem__(self, index):
+      """Returns the item at the given index.
+
+      Args:
+        index: The index of the item to return.
+
+      Returns:
+        A dictionary containing the input image, target transmission layer, filename,
+        a boolean indicating whether the image is real, the target reflection layer,
+        and the estimated target reflection layer.
+      """
         fn = self.fns[index]
 
         t_img = Image.open(join(self.datadir, 'transmission_layer', fn)).convert('RGB')
@@ -271,6 +416,7 @@ class SIRTestDataset(BaseDataset):
         return dic
 
     def __len__(self):
+      """Returns the length of the dataset."""
         if self.size is not None:
             return min(len(self.fns), self.size)
         else:
@@ -278,6 +424,13 @@ class SIRTestDataset(BaseDataset):
 
 
 class RealDataset(BaseDataset):
+  """Dataset for real images.
+
+  Args:
+    datadir: The directory containing the data.
+    fns: A list of filenames. If None, all files in the directory will be used.
+    size: The maximum number of images to use. If None, all images will be used.
+  """
     def __init__(self, datadir, fns=None, size=None):
         super(RealDataset, self).__init__()
         self.size = size
@@ -288,12 +441,28 @@ class RealDataset(BaseDataset):
             self.fns = self.fns[:size]
 
     def align(self, x):
+      """Aligns an image by resizing it to dimensions divisible by 32.
+
+      Args:
+        x: The input image.
+
+      Returns:
+        The aligned image.
+      """
         h, w = x.height, x.width
         h, w = h // 32 * 32, w // 32 * 32
         x = x.resize((w, h))
         return x
 
     def __getitem__(self, index):
+      """Returns the item at the given index.
+
+      Args:
+        index: The index of the item to return.
+
+      Returns:
+        A dictionary containing the input image, a placeholder for the target transmission layer, and the filename.
+      """
         fn = self.fns[index]
         B = -1
         m_img = Image.open(join(self.datadir, fn)).convert('RGB')
@@ -302,6 +471,7 @@ class RealDataset(BaseDataset):
         return data
 
     def __len__(self):
+      """Returns the length of the dataset."""
         if self.size is not None:
             return min(len(self.fns), self.size)
         else:
@@ -309,6 +479,12 @@ class RealDataset(BaseDataset):
 
 
 class FusionDataset(BaseDataset):
+  """A dataset that fuses multiple datasets.
+
+  Args:
+    datasets: A list of datasets to fuse.
+    fusion_ratios: A list of ratios for fusing the datasets. If None, all datasets will be fused with equal ratios.
+  """
     def __init__(self, datasets, fusion_ratios=None):
         self.datasets = datasets
         self.size = sum([len(dataset) for dataset in datasets])
@@ -317,10 +493,21 @@ class FusionDataset(BaseDataset):
             self.size, [len(dataset) for dataset in datasets], self.fusion_ratios))
 
     def reset(self):
+      """Resets all datasets in the fusion dataset."""
         for dataset in self.datasets:
             dataset.reset()
 
     def __getitem__(self, index):
+      """Returns the item at the given index from one of the fused datasets.
+
+      The dataset is chosen randomly based on the fusion ratios.
+
+      Args:
+        index: The index of the item to return.
+
+      Returns:
+        The item at the given index from one of the fused datasets.
+      """
         residual = 1
         for i, ratio in enumerate(self.fusion_ratios):
             if random.random() < ratio / residual or i == len(self.fusion_ratios) - 1:
@@ -329,4 +516,5 @@ class FusionDataset(BaseDataset):
             residual -= ratio
 
     def __len__(self):
+      """Returns the total size of the fusion dataset."""
         return self.size

@@ -11,17 +11,35 @@ from models.vgg import Vgg19
 # Functions
 ###############################################################################
 def compute_gradient(img):
+  """Computes the image gradients.
+
+  Args:
+    img: The input image.
+
+  Returns:
+    A tuple containing the x and y gradients.
+  """
     gradx = img[..., 1:, :] - img[..., :-1, :]
     grady = img[..., 1:] - img[..., :-1]
     return gradx, grady
 
 
 class GradientLoss(nn.Module):
+  """Computes the L1 loss between the gradients of the predicted and target images."""
     def __init__(self):
         super(GradientLoss, self).__init__()
         self.loss = nn.L1Loss()
 
     def forward(self, predict, target):
+      """Computes the gradient loss.
+
+      Args:
+        predict: The predicted image.
+        target: The target image.
+
+      Returns:
+        The gradient loss.
+      """
         predict_gradx, predict_grady = compute_gradient(predict)
         target_gradx, target_grady = compute_gradient(target)
 
@@ -29,11 +47,26 @@ class GradientLoss(nn.Module):
 
 
 class ContainLoss(nn.Module):
+  """Computes the containment loss.
+
+  Args:
+    eps: A small epsilon value to prevent division by zero.
+  """
     def __init__(self, eps=1e-12):
         super(ContainLoss, self).__init__()
         self.eps = eps
 
     def forward(self, predict_t, predict_r, input_image):
+      """Computes the containment loss.
+
+      Args:
+        predict_t: The predicted transmission layer.
+        predict_r: The predicted reflection layer.
+        input_image: The input image.
+
+      Returns:
+        The containment loss.
+      """
         pix_num = np.prod(input_image.shape)
         predict_tx, predict_ty = compute_gradient(predict_t)
         predict_rx, predict_ry = compute_gradient(predict_r)
@@ -48,12 +81,27 @@ class ContainLoss(nn.Module):
 
 
 class MultipleLoss(nn.Module):
+  """Computes a weighted sum of multiple losses.
+
+  Args:
+    losses: A list of loss functions.
+    weight: A list of weights for each loss function. If None, equal weights will be used.
+  """
     def __init__(self, losses, weight=None):
         super(MultipleLoss, self).__init__()
         self.losses = nn.ModuleList(losses)
         self.weight = weight or [1 / len(self.losses)] * len(self.losses)
 
     def forward(self, predict, target):
+      """Computes the weighted sum of losses.
+
+      Args:
+        predict: The predicted image.
+        target: The target image.
+
+      Returns:
+        The total weighted loss.
+      """
         total_loss = 0
         for weight, loss in zip(self.weight, self.losses):
             total_loss += loss(predict, target) * weight
@@ -61,6 +109,14 @@ class MultipleLoss(nn.Module):
 
 
 class MeanShift(nn.Conv2d):
+  """Applies mean shift normalization to the input.
+
+  Args:
+    data_mean: The mean of the data.
+    data_std: The standard deviation of the data.
+    data_range: The range of the data.
+    norm: Whether to normalize or denormalize the stats.
+  """
     def __init__(self, data_mean, data_std, data_range=1, norm=True):
         """norm (bool): normalize/denormalize the stats"""
         c = len(data_mean)
@@ -78,6 +134,14 @@ class MeanShift(nn.Conv2d):
 
 
 class VGGLoss(nn.Module):
+  """Computes the VGG perceptual loss.
+
+  Args:
+    vgg: The VGG model to use. If None, a new Vgg19 model will be created.
+    weights: A list of weights for each VGG layer.
+    indices: A list of VGG layer indices to use.
+    normalize: Whether to normalize the input images.
+  """
     def __init__(self, vgg=None, weights=None, indices=None, normalize=True):
         super(VGGLoss, self).__init__()
         if vgg is None:
@@ -93,6 +157,15 @@ class VGGLoss(nn.Module):
             self.normalize = None
 
     def forward(self, x, y):
+      """Computes the VGG perceptual loss.
+
+      Args:
+        x: The predicted image.
+        y: The target image.
+
+      Returns:
+        The VGG perceptual loss.
+      """
         if self.normalize is not None:
             x = self.normalize(x)
             y = self.normalize(y)
@@ -105,18 +178,52 @@ class VGGLoss(nn.Module):
 
 
 def l1_norm_dim(x, dim):
+  """Computes the L1 norm along a specific dimension.
+
+  Args:
+    x: The input tensor.
+    dim: The dimension along which to compute the L1 norm.
+
+  Returns:
+    The L1 norm along the specified dimension.
+  """
     return torch.mean(torch.abs(x), dim=dim)
 
 
 def l1_norm(x):
+  """Computes the L1 norm of a tensor.
+
+  Args:
+    x: The input tensor.
+
+  Returns:
+    The L1 norm of the tensor.
+  """
     return torch.mean(torch.abs(x))
 
 
 def l2_norm(x):
+  """Computes the L2 norm of a tensor.
+
+  Args:
+    x: The input tensor.
+
+  Returns:
+    The L2 norm of the tensor.
+  """
     return torch.mean(torch.square(x))
 
 
 def gradient_norm_kernel(x, kernel_size=10):
+  """Computes the gradient norm using a kernel.
+
+  Args:
+    x: The input tensor.
+    kernel_size: The size of the kernel.
+
+  Returns:
+    A tuple containing the horizontal and vertical gradient norms.
+  """
     out_h, out_v = compute_gradient(x)
     shape = out_h.shape
     out_h = F.unfold(out_h, kernel_size=(kernel_size, kernel_size), stride=(1, 1))
@@ -129,6 +236,11 @@ def gradient_norm_kernel(x, kernel_size=10):
 
 
 class KTVLoss(nn.Module):
+  """Computes the Kernel Total Variation (KTV) loss.
+
+  Args:
+    kernel_size: The size of the kernel.
+  """
     def __init__(self, kernel_size=10):
         super().__init__()
         self.kernel_size = kernel_size
@@ -136,6 +248,16 @@ class KTVLoss(nn.Module):
         self.eps = 1e-6
 
     def forward(self, out_l, out_r, input_i):
+      """Computes the KTV loss.
+
+      Args:
+        out_l: The output of the left branch.
+        out_r: The output of the right branch.
+        input_i: The input image.
+
+      Returns:
+        The KTV loss.
+      """
         out_l_normx, out_l_normy = gradient_norm_kernel(out_l, self.kernel_size)
         out_r_normx, out_r_normy = gradient_norm_kernel(out_r, self.kernel_size)
         input_normx, input_normy = gradient_norm_kernel(input_i, self.kernel_size)
@@ -156,12 +278,27 @@ class KTVLoss(nn.Module):
 
 
 class MTVLoss(nn.Module):
+  """Computes the Mean Total Variation (MTV) loss.
+
+  Args:
+    kernel_size: The size of the kernel. (Not used in the current implementation)
+  """
     def __init__(self, kernel_size=10):
         super().__init__()
         self.criterion = nn.L1Loss()
         self.norm = l1_norm
 
     def forward(self, out_l, out_r, input_i):
+      """Computes the MTV loss.
+
+      Args:
+        out_l: The output of the left branch.
+        out_r: The output of the right branch.
+        input_i: The input image.
+
+      Returns:
+        The MTV loss.
+      """
         out_lx, out_ly = compute_gradient(out_l)
         out_rx, out_ry = compute_gradient(out_r)
         input_x, input_y = compute_gradient(input_i)
@@ -179,12 +316,23 @@ class MTVLoss(nn.Module):
 
 
 class ReconsLoss(nn.Module):
+  """Computes the reconstruction loss."""
     def __init__(self):
         super().__init__()
         self.criterion = nn.L1Loss()
         self.norm = l1_norm
 
     def forward(self, out_l, out_r, input_i):
+      """Computes the reconstruction loss.
+
+      Args:
+        out_l: The output of the left branch.
+        out_r: The output of the right branch.
+        input_i: The input image.
+
+      Returns:
+        The reconstruction loss.
+      """
         content_diff = self.criterion(out_l + out_r, input_i)
         out_lx, out_ly = compute_gradient(out_l)
         out_rx, out_ry = compute_gradient(out_r)
@@ -199,14 +347,37 @@ class ReconsLoss(nn.Module):
 
 
 class ContentLoss():
+  """Computes the content loss using a specified criterion."""
     def initialize(self, loss):
+      """Initializes the content loss with a criterion.
+
+      Args:
+        loss: The criterion to use for computing the content loss.
+      """
         self.criterion = loss
 
     def get_loss(self, fakeIm, realIm):
+      """Computes the content loss.
+
+      Args:
+        fakeIm: The fake image.
+        realIm: The real image.
+
+      Returns:
+        The content loss.
+      """
         return self.criterion(fakeIm, realIm)
 
 
 class GANLoss(nn.Module):
+  """Computes the GAN loss.
+
+  Args:
+    use_l1: Whether to use L1 loss or BCEWithLogitsLoss.
+    target_real_label: The label for real images.
+    target_fake_label: The label for fake images.
+    tensor: The tensor type to use.
+  """
     def __init__(self, use_l1=True, target_real_label=1.0, target_fake_label=0.0,
                  tensor=torch.FloatTensor):
         super(GANLoss, self).__init__()
@@ -221,6 +392,15 @@ class GANLoss(nn.Module):
             self.loss = nn.BCEWithLogitsLoss()  # absorb sigmoid into BCELoss
 
     def get_target_tensor(self, input, target_is_real):
+      """Returns the target tensor for GAN loss computation.
+
+      Args:
+        input: The input tensor.
+        target_is_real: Whether the target is real or fake.
+
+      Returns:
+        The target tensor.
+      """
         target_tensor = None
         if target_is_real:
             create_label = ((self.real_label_var is None) or
@@ -239,6 +419,15 @@ class GANLoss(nn.Module):
         return target_tensor
 
     def __call__(self, input, target_is_real):
+      """Computes the GAN loss.
+
+      Args:
+        input: The input tensor (discriminator output).
+        target_is_real: Whether the target is real or fake.
+
+      Returns:
+        The GAN loss.
+      """
         if isinstance(input, list):
             loss = 0
             for input_i in input:
@@ -251,18 +440,53 @@ class GANLoss(nn.Module):
 
 
 class DiscLoss():
+  """Base class for discriminator losses."""
     def name(self):
+      """Returns the name of the discriminator loss.
+
+      Returns:
+        The name of the discriminator loss ('SGAN').
+      """
         return 'SGAN'
 
     def initialize(self, opt, tensor):
+      """Initializes the discriminator loss.
+
+      Args:
+        opt: The options for the discriminator loss.
+        tensor: The tensor type to use.
+      """
         self.criterionGAN = GANLoss(use_l1=False, tensor=tensor)
 
     def get_g_loss(self, net, realA, fakeB, realB):
+      """Computes the generator loss for the discriminator.
+
+      Args:
+        net: The discriminator network.
+        realA: The real image from domain A.
+        fakeB: The fake image from domain B.
+        realB: The real image from domain B.
+
+      Returns:
+        The generator loss.
+      """
         # First, G(A) should fake the discriminator
         pred_fake = net.forward(fakeB)
         return self.criterionGAN(pred_fake, 1)
 
     def get_loss(self, net, realA=None, fakeB=None, realB=None):
+      """Computes the discriminator loss.
+
+      Args:
+        net: The discriminator network.
+        realA: The real image from domain A.
+        fakeB: The fake image from domain B.
+        realB: The real image from domain B.
+
+      Returns:
+        A tuple containing the discriminator loss, the discriminator output for fake images,
+        and the discriminator output for real images.
+      """
         pred_fake = None
         pred_real = None
         loss_D_fake = 0
@@ -286,22 +510,59 @@ class DiscLoss():
 
 
 class DiscLossR(DiscLoss):
-    # RSGAN from
-    # https://arxiv.org/abs/1807.00734
+  """Relativistic Standard GAN (RSGAN) discriminator loss.
+
+  Paper: https://arxiv.org/abs/1807.00734
+  """
     def name(self):
+      """Returns the name of the discriminator loss.
+
+      Returns:
+        The name of the discriminator loss ('RSGAN').
+      """
         return 'RSGAN'
 
     def initialize(self, opt, tensor):
+      """Initializes the RSGAN discriminator loss.
+
+      Args:
+        opt: The options for the discriminator loss.
+        tensor: The tensor type to use.
+      """
         DiscLoss.initialize(self, opt, tensor)
         self.criterionGAN = GANLoss(use_l1=False, tensor=tensor)
 
     def get_g_loss(self, net, realA, fakeB, realB, pred_real=None):
+      """Computes the generator loss for RSGAN.
+
+      Args:
+        net: The discriminator network.
+        realA: The real image from domain A.
+        fakeB: The fake image from domain B.
+        realB: The real image from domain B.
+        pred_real: The discriminator output for real images. If None, it will be computed.
+
+      Returns:
+        The generator loss for RSGAN.
+      """
         if pred_real is None:
             pred_real = net.forward(realB)
         pred_fake = net.forward(fakeB)
         return self.criterionGAN(pred_fake - pred_real, 1)
 
     def get_loss(self, net, realA, fakeB, realB):
+      """Computes the discriminator loss for RSGAN.
+
+      Args:
+        net: The discriminator network.
+        realA: The real image from domain A.
+        fakeB: The fake image from domain B.
+        realB: The real image from domain B.
+
+      Returns:
+        A tuple containing the discriminator loss, the discriminator output for fake images,
+        and the discriminator output for real images.
+      """
         pred_real = net.forward(realB)
         pred_fake = net.forward(fakeB.detach())
 
@@ -310,16 +571,41 @@ class DiscLossR(DiscLoss):
 
 
 class DiscLossRa(DiscLoss):
-    # RaSGAN from
-    # https://arxiv.org/abs/1807.00734
+  """Relativistic average Standard GAN (RaSGAN) discriminator loss.
+
+  Paper: https://arxiv.org/abs/1807.00734
+  """
     def name(self):
+      """Returns the name of the discriminator loss.
+
+      Returns:
+        The name of the discriminator loss ('RaSGAN').
+      """
         return 'RaSGAN'
 
     def initialize(self, opt, tensor):
+      """Initializes the RaSGAN discriminator loss.
+
+      Args:
+        opt: The options for the discriminator loss.
+        tensor: The tensor type to use.
+      """
         DiscLoss.initialize(self, opt, tensor)
         self.criterionGAN = GANLoss(use_l1=False, tensor=tensor)
 
     def get_g_loss(self, net, realA, fakeB, realB, pred_real=None):
+      """Computes the generator loss for RaSGAN.
+
+      Args:
+        net: The discriminator network.
+        realA: The real image from domain A.
+        fakeB: The fake image from domain B.
+        realB: The real image from domain B.
+        pred_real: The discriminator output for real images. If None, it will be computed.
+
+      Returns:
+        The generator loss for RaSGAN.
+      """
         if pred_real is None:
             pred_real = net.forward(realB)
         pred_fake = net.forward(fakeB)
@@ -329,6 +615,18 @@ class DiscLossRa(DiscLoss):
         return loss_G * 0.5
 
     def get_loss(self, net, realA, fakeB, realB):
+      """Computes the discriminator loss for RaSGAN.
+
+      Args:
+        net: The discriminator network.
+        realA: The real image from domain A.
+        fakeB: The fake image from domain B.
+        realB: The real image from domain B.
+
+      Returns:
+        A tuple containing the discriminator loss, the discriminator output for fake images,
+        and the discriminator output for real images.
+      """
         pred_real = net.forward(realB)
         pred_fake = net.forward(fakeB.detach())
 
@@ -338,24 +636,53 @@ class DiscLossRa(DiscLoss):
 
 
 class MS_SSIM_Loss(nn.Module):
+  """Computes the Multi-Scale Structural Similarity Index (MS-SSIM) loss."""
     def __init__(self):
         super().__init__()
         self.ms_ssim = MS_SSIM(data_range=1, size_average=True, channel=3)
 
     def forward(self, output, target):
+      """Computes the MS-SSIM loss.
+
+      Args:
+        output: The predicted image.
+        target: The target image.
+
+      Returns:
+        The MS-SSIM loss.
+      """
         return 1 - self.ms_ssim(output, target)
 
 
 class SSIM_Loss(nn.Module):
+  """Computes the Structural Similarity Index (SSIM) loss."""
     def __init__(self):
         super().__init__()
         self.ssim = SSIM(data_range=1, size_average=True, channel=3)
 
     def forward(self, output, target):
+      """Computes the SSIM loss.
+
+      Args:
+        output: The predicted image.
+        target: The target image.
+
+      Returns:
+        The SSIM loss.
+      """
         return 1 - self.ssim(output, target)
 
 
 def init_loss(opt, tensor):
+  """Initializes the loss functions.
+
+  Args:
+    opt: The options for the loss functions.
+    tensor: The tensor type to use.
+
+  Returns:
+    A dictionary containing the initialized loss functions.
+  """
     disc_loss = None
     content_loss = None
 

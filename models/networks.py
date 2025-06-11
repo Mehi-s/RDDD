@@ -12,6 +12,11 @@ from torch.nn import functional as F
 
 
 def weights_init_normal(m):
+  """Initializes the weights of a module with a normal distribution.
+
+  Args:
+    m: The module to initialize.
+  """
     classname = m.__class__.__name__
     # print(classname)
     if isinstance(m, nn.Sequential):
@@ -26,6 +31,11 @@ def weights_init_normal(m):
 
 
 def weights_init_xavier(m):
+  """Initializes the weights of a module with a Xavier normal distribution.
+
+  Args:
+    m: The module to initialize.
+  """
     classname = m.__class__.__name__
     # print(classname)
     if isinstance(m, (nn.Conv2d, nn.ConvTranspose2d)):
@@ -38,6 +48,11 @@ def weights_init_xavier(m):
 
 
 def weights_init_kaiming(m):
+  """Initializes the weights of a module with a Kaiming normal distribution.
+
+  Args:
+    m: The module to initialize.
+  """
     classname = m.__class__.__name__
     # print(classname)
     if isinstance(m, (nn.Conv2d, nn.ConvTranspose2d)):
@@ -50,6 +65,11 @@ def weights_init_kaiming(m):
 
 
 def weights_init_orthogonal(m):
+  """Initializes the weights of a module with an orthogonal distribution.
+
+  Args:
+    m: The module to initialize.
+  """
     classname = m.__class__.__name__
     print(classname)
     if isinstance(m, (nn.Conv2d, nn.ConvTranspose2d)):
@@ -62,6 +82,12 @@ def weights_init_orthogonal(m):
 
 
 def init_weights(net, init_type='normal'):
+  """Initializes the weights of a network.
+
+  Args:
+    net: The network to initialize.
+    init_type: The type of initialization to use (e.g., 'normal', 'xavier', 'kaiming', 'orthogonal').
+  """
     print('[i] initialization method [%s]' % init_type)
     if init_type == 'normal':
         net.apply(weights_init_normal)
@@ -78,6 +104,14 @@ def init_weights(net, init_type='normal'):
 
 
 def get_norm_layer(norm_type='instance'):
+  """Returns a normalization layer.
+
+  Args:
+    norm_type: The type of normalization layer to use (e.g., 'batch', 'instance', 'none').
+
+  Returns:
+    A normalization layer.
+  """
     if norm_type == 'batch':
         norm_layer = functools.partial(nn.BatchNorm2d, affine=True)
     elif norm_type == 'instance':
@@ -90,6 +124,15 @@ def get_norm_layer(norm_type='instance'):
 
 
 def define_D(opt, in_channels=3):
+  """Defines a discriminator network.
+
+  Args:
+    opt: The options for the discriminator network.
+    in_channels: The number of input channels.
+
+  Returns:
+    A discriminator network.
+  """
     # use_sigmoid = opt.gan_type == 'gan'
     use_sigmoid = False # incorporate sigmoid into BCE_stable loss
 
@@ -112,6 +155,11 @@ def define_D(opt, in_channels=3):
 
 
 def print_network(net):
+  """Prints the network architecture and the number of parameters.
+
+  Args:
+    net: The network to print.
+  """
     num_params = 0
     for param in net.parameters():
         num_params += param.numel()
@@ -121,6 +169,14 @@ def print_network(net):
 
 
 def receptive_field(net):
+  """Computes the receptive field of a network.
+
+  Args:
+    net: The network to compute the receptive field for.
+
+  Returns:
+    The size of the receptive field.
+  """
     def _f(output_size, ksize, stride, dilation):
         return (output_size - 1) * stride + ksize * dilation - dilation + 1
 
@@ -139,6 +195,11 @@ def receptive_field(net):
 
 
 def debug_network(net):
+  """Registers a forward hook to print the output size of each module in a network.
+
+  Args:
+    net: The network to debug.
+  """
     def _hook(m, i, o):
         print(o.size())
     for m in net.modules():
@@ -151,8 +212,20 @@ def debug_network(net):
 
 # Defines the PatchGAN discriminator with the specified arguments.
 class NLayerDiscriminator(nn.Module):
-    def __init__(self, input_nc, ndf=64, n_layers=3, 
-    norm_layer=nn.BatchNorm2d, use_sigmoid=False, 
+  """Defines a PatchGAN discriminator.
+
+  Args:
+    input_nc: The number of input channels.
+    ndf: The number of discriminator filters in the first convolutional layer.
+    n_layers: The number of convolutional layers in the discriminator.
+    norm_layer: The normalization layer to use.
+    use_sigmoid: Whether to use a sigmoid activation function at the end.
+    branch: The number of branches in the discriminator.
+    bias: Whether to use bias in convolutional layers.
+    getIntermFeat: Whether to return intermediate features.
+  """
+    def __init__(self, input_nc, ndf=64, n_layers=3,
+    norm_layer=nn.BatchNorm2d, use_sigmoid=False,
     branch=1, bias=True, getIntermFeat=False):
         super(NLayerDiscriminator, self).__init__()
         self.getIntermFeat = getIntermFeat
@@ -193,6 +266,14 @@ class NLayerDiscriminator(nn.Module):
             self.model = nn.Sequential(*sequence_stream)
 
     def forward(self, input):
+      """Performs a forward pass through the NLayerDiscriminator.
+
+      Args:
+        input: The input tensor.
+
+      Returns:
+        The output of the discriminator. If getIntermFeat is True, returns a list of intermediate features.
+      """
         if self.getIntermFeat:
             res = [input]
             for n in range(self.n_layers+2):
@@ -204,6 +285,12 @@ class NLayerDiscriminator(nn.Module):
 
 
 class Discriminator_VGG(nn.Module):
+  """Defines a VGG-style discriminator.
+
+  Args:
+    in_channels: The number of input channels.
+    use_sigmoid: Whether to use a sigmoid activation function at the end.
+  """
     def __init__(self, in_channels=3, use_sigmoid=True):
         super(Discriminator_VGG, self).__init__()
         def conv(*args, **kwargs):
@@ -266,16 +353,24 @@ class Discriminator_VGG(nn.Module):
         self.tail = nn.Sequential(*tail)
 
     def forward(self, x):
+      """Performs a forward pass through the Discriminator_VGG.
+
+      Args:
+        x: The input tensor.
+
+      Returns:
+        The output of the discriminator.
+      """
         x = self.body(x)
         out = self.tail(x)
         return out
 
 class UNetDiscriminatorSN(nn.Module):
-    """Defines a U-Net discriminator with spectral normalization (SN)
+    """Defines a U-Net discriminator with spectral normalization (SN).
 
     It is used in Real-ESRGAN: Training Real-World Blind Super-Resolution with Pure Synthetic Data.
 
-    Arg:
+    Args:
         num_in_ch (int): Channel number of inputs. Default: 3.
         num_feat (int): Channel number of base intermediate features. Default: 64.
         skip_connection (bool): Whether to use skip connections between U-Net. Default: True.
@@ -301,6 +396,15 @@ class UNetDiscriminatorSN(nn.Module):
         self.conv9 = nn.Conv2d(num_feat, 1, 3, 1, 1)
 
     def forward(self, x, illu = None):
+      """Performs a forward pass through the UNetDiscriminatorSN.
+
+      Args:
+        x: The input tensor.
+        illu: The illumination map. (Optional)
+
+      Returns:
+        The output of the discriminator.
+      """
         # downsample
         ingress = self.conv0(x) 
         if illu is not None : ingress = ingress * (1 - illu * 2)

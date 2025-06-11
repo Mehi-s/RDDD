@@ -12,14 +12,42 @@ os.makedirs(base_url, exist_ok=True)
 
 
 def normalize_tensor_mm(tensor):
+  """Normalizes a tensor to the range [0, 1] using min-max normalization.
+
+  Args:
+    tensor: The input tensor.
+
+  Returns:
+    The normalized tensor.
+  """
     return (tensor - tensor.min()) / (tensor.max() - tensor.min())
 
 
 def normalize_tensor_sigmoid(tensor):
+  """Normalizes a tensor using the sigmoid function.
+
+  Args:
+    tensor: The input tensor.
+
+  Returns:
+    The normalized tensor.
+  """
     return nn.functional.sigmoid(tensor)
 
 
 def save_image(tensor, name=None, save_path=None, exit_flag=False, timestamp=False, nrow=4, split_dir=None):
+  """Saves a tensor as an image.
+
+  Args:
+    tensor: The input tensor (usually an image or a batch of images).
+    name: The base name for the saved image file.
+    save_path: The full path to save the image. If None, a path is generated
+               based on `base_url`, `split_dir`, and `name`.
+    exit_flag: If True, exits the program after saving the image.
+    timestamp: If True, appends a timestamp to the filename.
+    nrow: Number of images to display in each row of the grid.
+    split_dir: Optional subdirectory within `base_url` to save the image.
+  """
     if split_dir:
         _base_url = os.path.join(base_url, split_dir)
     else:
@@ -40,6 +68,18 @@ def save_image(tensor, name=None, save_path=None, exit_flag=False, timestamp=Fal
 
 
 def save_feature(tensor, name, exit_flag=False, timestamp=False):
+  """Saves a feature tensor as an image.
+
+  This function is intended for visualizing feature maps. Currently, it only
+  saves the original tensor without applying min-max or sigmoid normalization,
+  although there is commented-out code suggesting that was a possibility.
+
+  Args:
+    tensor: The input feature tensor.
+    name: The base name for the saved image file.
+    exit_flag: If True, exits the program after saving the image.
+    timestamp: If True, appends a timestamp to the filename.
+  """
     import torchvision.utils as vutils
     # tensors = [tensor, normalize_tensor_mm(tensor), normalize_tensor_sigmoid(tensor)]
     tensors = [tensor]
@@ -61,6 +101,13 @@ def save_feature(tensor, name, exit_flag=False, timestamp=False):
 
 
 def save(tensor, name, exit_flag=False):
+  """Saves a tensor (typically a single feature map or image) as an image.
+
+  Args:
+    tensor: The input tensor.
+    name: The base name for the saved image file.
+    exit_flag: If True, exits the program after saving the image.
+  """
     import torchvision.utils as vutils
     grid = vutils.make_grid(tensor.detach().cpu().squeeze(0).unsqueeze(1), nrow=4)
     # grid = (grid - grid.min()) / (grid.max() - grid.min())
@@ -71,6 +118,15 @@ def save(tensor, name, exit_flag=False):
 
 
 def save_grid_direct(grad, name):
+  """Saves a gradient tensor as an image and displays its histogram.
+
+  This function reshapes the gradient, scales it, clamps it, and saves it.
+  It also prints statistics about the gradient and displays a histogram.
+
+  Args:
+    grad: The input gradient tensor.
+    name: The base name for the saved image file and plot title.
+  """
     grad = grad.view(1, 8, 320, 320) * 255 / (320 * 320)
     # grad = grad.view(grad.shape[0],grad)
     save(grad.clamp(0, 255), name)
@@ -95,6 +151,17 @@ def save_grid_direct(grad, name):
 
 
 def save_grid(grad, name, exit_flag=False):
+  """Saves a gradient tensor as an image, potentially normalized by a previous gradient.
+
+  If `saved_grad` is None, this function stores the current gradient and name.
+  Otherwise, it normalizes the current gradient by the `saved_grad`,
+  saves the normalized gradient as an image, prints statistics, and displays a histogram.
+
+  Args:
+    grad: The input gradient tensor.
+    name: The base name for the saved image file and plot title.
+    exit_flag: If True, exits the program after saving/displaying.
+  """
     global saved_grad, saved_name
     print(grad.shape)
     if saved_grad is None:
@@ -166,6 +233,15 @@ def save_grid(grad, name, exit_flag=False):
 
 
 def show_grid(grid, name, exit_flag=False):
+  """Displays a grid of images using matplotlib.
+
+  The input tensor is normalized to [0, 1] before display.
+
+  Args:
+    grid: The input tensor, typically a batch of feature maps or images.
+    name: The title for the plot.
+    exit_flag: If True, exits the program after displaying the image.
+  """
     import torchvision.utils as vutils
     import torchvision.transforms as vtrans
     import matplotlib.pyplot as plt
@@ -183,6 +259,13 @@ def show_grid(grid, name, exit_flag=False):
 
 
 def show_img(img, name, exit_flag=False):
+  """Displays a single image using matplotlib.
+
+  Args:
+    img: The input image tensor.
+    name: The title for the plot.
+    exit_flag: If True, exits the program after displaying the image.
+  """
     import torchvision.utils as vutils
     import torchvision.transforms as vtrans
     import matplotlib.pyplot as plt
@@ -199,9 +282,21 @@ def show_img(img, name, exit_flag=False):
 
 
 class SaverBlock(nn.Module):
+  """A simple nn.Module that saves the input feature tensor during the forward pass.
+
+  This can be inserted into a model to inspect intermediate features.
+  """
     def __init__(self):
         super(SaverBlock, self).__init__()
 
     def forward(self, x):
+      """Saves the first element of the input tensor and returns the input tensor unchanged.
+
+      Args:
+        x: The input tensor (expected to be a list or tuple if only the first element is saved).
+
+      Returns:
+        The input tensor `x`.
+      """
         save_feature(x[0], 'intermediate_', timestamp=True)
         return x
